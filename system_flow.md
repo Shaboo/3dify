@@ -1,4 +1,4 @@
-# Omni3D — System Flow & User Journey
+# 3dify — System Flow & User Journey
 
 A detailed walkthrough of every flow in the system: what gets called, what gets stored, what gets returned.
 
@@ -286,7 +286,7 @@ Public routes allowed in chain #4: `POST /auth/register`, `POST /auth/login`, `G
 
 All repositories follow a **clean entity pattern**:
 
-- Each DB table maps to an immutable `data class` entity in `com.omni3d.api.domain`
+- Each DB table maps to an immutable `data class` entity in `com.3dify.api.domain`
 - All repository methods accept and return typed entities — never raw JOOQ `Record`
 - JOOQ field references (`DSL.field(...)`) are **fully private** inside each repository class
 - Services contain zero JOOQ imports — they work with plain Kotlin data classes
@@ -308,33 +308,33 @@ All repositories follow a **clean entity pattern**:
 
 ## Observability
 
-### AppMetrics (`com.omni3d.api.metrics.AppMetrics`)
+### AppMetrics (`com.3dify.api.metrics.AppMetrics`)
 
-A central Micrometer registry component. Naming convention: `omni3d.<domain>.<action>`. Tags are used for result labels — never high-cardinality values like UUIDs.
+A central Micrometer registry component. Naming convention: `3dify.<domain>.<action>`. Tags are used for result labels — never high-cardinality values like UUIDs.
 
 | Metric | Type | Tags | Description |
 |---|---|---|---|
-| `omni3d.users.registered` | Counter | — | Successful registrations |
-| `omni3d.users.logins` | Counter | `result=success\|failed` | Login outcomes |
-| `omni3d.api_keys.created` | Counter | — | API keys created |
-| `omni3d.api_keys.revoked` | Counter | — | API keys revoked |
-| `omni3d.api_keys.validations` | Counter | `result=valid\|invalid` | Key validation outcomes |
-| `omni3d.rate_limit.rejected` | Counter | — | Rate-limited requests |
-| `omni3d.jobs.created` | Counter | — | Jobs submitted |
-| `omni3d.jobs.dispatched` | Counter | — | Jobs sent to GPU |
-| `omni3d.jobs.completed` | Counter | `result=success\|failed` | Job outcomes |
-| `omni3d.jobs.duration` | Timer | — | End-to-end job duration (histogram) |
-| `omni3d.outbox.published` | Counter | — | Outbox messages published |
-| `omni3d.outbox.failed` | Counter | — | Outbox publish failures |
-| `omni3d.runpod.dispatched` | Counter | — | Jobs sent to RunPod |
-| `omni3d.runpod.callbacks` | Counter | `result=success\|failed` | RunPod webhook callbacks |
-| `omni3d.runpod.errors` | Counter | — | RunPod dispatch errors |
-| `omni3d.subscriptions.activated` | Counter | — | Subscriptions activated |
-| `omni3d.subscriptions.canceled` | Counter | — | Subscriptions canceled |
-| `omni3d.subscriptions.past_due` | Counter | — | Past-due subscriptions |
-| `omni3d.webhooks.deliveries` | Counter | `result=success\|failed` | User webhook delivery outcomes |
-| `omni3d.auth.failures` | Counter | `reason=invalid_key\|no_subscription\|rate_limit` | Auth failure breakdown |
-| `omni3d.storage.uploads` | Counter | `result=success\|error` | R2 upload outcomes |
+| `3dify.users.registered` | Counter | — | Successful registrations |
+| `3dify.users.logins` | Counter | `result=success\|failed` | Login outcomes |
+| `3dify.api_keys.created` | Counter | — | API keys created |
+| `3dify.api_keys.revoked` | Counter | — | API keys revoked |
+| `3dify.api_keys.validations` | Counter | `result=valid\|invalid` | Key validation outcomes |
+| `3dify.rate_limit.rejected` | Counter | — | Rate-limited requests |
+| `3dify.jobs.created` | Counter | — | Jobs submitted |
+| `3dify.jobs.dispatched` | Counter | — | Jobs sent to GPU |
+| `3dify.jobs.completed` | Counter | `result=success\|failed` | Job outcomes |
+| `3dify.jobs.duration` | Timer | — | End-to-end job duration (histogram) |
+| `3dify.outbox.published` | Counter | — | Outbox messages published |
+| `3dify.outbox.failed` | Counter | — | Outbox publish failures |
+| `3dify.runpod.dispatched` | Counter | — | Jobs sent to RunPod |
+| `3dify.runpod.callbacks` | Counter | `result=success\|failed` | RunPod webhook callbacks |
+| `3dify.runpod.errors` | Counter | — | RunPod dispatch errors |
+| `3dify.subscriptions.activated` | Counter | — | Subscriptions activated |
+| `3dify.subscriptions.canceled` | Counter | — | Subscriptions canceled |
+| `3dify.subscriptions.past_due` | Counter | — | Past-due subscriptions |
+| `3dify.webhooks.deliveries` | Counter | `result=success\|failed` | User webhook delivery outcomes |
+| `3dify.auth.failures` | Counter | `reason=invalid_key\|no_subscription\|rate_limit` | Auth failure breakdown |
+| `3dify.storage.uploads` | Counter | `result=success\|error` | R2 upload outcomes |
 
 Metrics are exposed at `/actuator/prometheus` and scraped by the Prometheus Agent in `observability/prometheus-agent.yml`. Logs are shipped by Promtail (`observability`) — both send to **Grafana Cloud**. MDC fields `jobId`, `userId`, `apiKeyId` are injected into log lines for trace correlation.
 
@@ -486,7 +486,7 @@ Runs every **500ms** via `@Scheduled`.
 1. `OutboxRepository.findUnpublished(50)` → `SELECT ... FROM outbox_messages WHERE published_at IS NULL ORDER BY created_at LIMIT 50`
 2. For each message:
    - Deserialize payload → `TaskMessage`
-   - `TaskProducer.sendTask()` → publish to RabbitMQ exchange `omni3d.exchange` / routing key `generate.3d`
+   - `TaskProducer.sendTask()` → publish to RabbitMQ exchange `3dify.exchange` / routing key `generate.3d`
    - `OutboxRepository.markPublished(id)` → `UPDATE outbox_messages SET published_at = NOW() WHERE id = ?`
    - `AppMetrics.outboxPublished.increment()` (or `.outboxFailed` on error)
 

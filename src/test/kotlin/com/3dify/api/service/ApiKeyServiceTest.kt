@@ -3,8 +3,10 @@ package com.omni3d.api.service
 import com.omni3d.api.domain.ApiKeyAuthEntity
 import com.omni3d.api.domain.PlanEntity
 import com.omni3d.api.exception.NotFoundException
+import com.omni3d.api.metrics.AppMetrics
 import com.omni3d.api.repository.ApiKeyRepository
 import com.omni3d.api.repository.PlanRepository
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -18,7 +20,8 @@ class ApiKeyServiceTest {
 
     private val apiKeyRepository: ApiKeyRepository = mockk()
     private val planRepository: PlanRepository = mockk()
-    private val service = ApiKeyService(apiKeyRepository, planRepository)
+    private val metrics = AppMetrics(SimpleMeterRegistry())
+    private val service = ApiKeyService(apiKeyRepository, planRepository, metrics)
 
     private fun plan(
         id: UUID = UUID.randomUUID(),

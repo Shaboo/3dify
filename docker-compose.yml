@@ -3,17 +3,17 @@ services:
 #    build:
 #      context: .
 #      dockerfile: Dockerfile
-#    container_name: omni3d-backend
+#    container_name: 3dify-backend
 #    ports:
 #      - "8080:8080"
 #    environment:
-#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/omni3d
-#      SPRING_DATASOURCE_USERNAME: omni3d
-#      SPRING_DATASOURCE_PASSWORD: omni3d
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/3dify
+#      SPRING_DATASOURCE_USERNAME: 3dify
+#      SPRING_DATASOURCE_PASSWORD: 3dify
 #      SPRING_RABBITMQ_HOST: rabbitmq
 #      SPRING_RABBITMQ_PORT: 5672
-#      SPRING_RABBITMQ_USERNAME: omni3d
-#      SPRING_RABBITMQ_PASSWORD: omni3d
+#      SPRING_RABBITMQ_USERNAME: 3dify
+#      SPRING_RABBITMQ_PASSWORD: 3dify
 #      SPRING_DATA_REDIS_HOST: redis
 #      SPRING_DATA_REDIS_PORT: 6379
 #    depends_on:
@@ -24,30 +24,30 @@ services:
 #      redis:
 #        condition: service_started
 #    networks:
-#      - omni3d-network
+#      - 3dify-network
 
   postgres:
     image: postgres:16-alpine
-    container_name: omni3d-postgres
+    container_name: 3dify-postgres
     environment:
-      POSTGRES_DB: omni3d
-      POSTGRES_USER: omni3d
-      POSTGRES_PASSWORD: omni3d
+      POSTGRES_DB: 3dify
+      POSTGRES_USER: 3dify
+      POSTGRES_PASSWORD: 3dify
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U omni3d"]
+      test: ["CMD-SHELL", "pg_isready -U 3dify"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - omni3d-network
+      - 3dify-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
-    container_name: omni3d-rabbitmq
+    container_name: 3dify-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -60,19 +60,19 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - omni3d-network
+      - 3dify-network
 
   redis:
     image: redis:7-alpine
-    container_name: omni3d-redis
+    container_name: 3dify-redis
     ports:
       - "6379:6379"
     networks:
-      - omni3d-network
+      - 3dify-network
 
 volumes:
   pgdata:
 
 networks:
-  omni3d-network:
+  3dify-network:
     driver: bridge

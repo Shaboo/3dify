@@ -4,6 +4,7 @@ import io.github.bucket4j.Bandwidth
 import io.github.bucket4j.BucketConfiguration
 import io.github.bucket4j.distributed.jdbc.BucketTableSettings
 import io.github.bucket4j.distributed.jdbc.PrimaryKeyMapper
+import io.github.bucket4j.distributed.jdbc.SQLProxyConfiguration
 import io.github.bucket4j.distributed.jdbc.SQLProxyConfigurationBuilder
 import io.github.bucket4j.distributed.proxy.ProxyManager
 import io.github.bucket4j.postgresql.PostgreSQLadvisoryLockBasedProxyManager
@@ -21,12 +22,12 @@ class RateLimiterService(
 
     init {
         val tableSettings = BucketTableSettings.customSettings("rate_limits", "id", "state")
-        val proxyConfig = SQLProxyConfigurationBuilder.builder()
-            .withTableSettings(tableSettings)
+        val proxyConfig: SQLProxyConfiguration<String> = SQLProxyConfigurationBuilder.builder()
             .withPrimaryKeyMapper(PrimaryKeyMapper.STRING)
+            .withTableSettings(tableSettings)
             .build(dataSource)
             
-        proxyManager = PostgreSQLadvisoryLockBasedProxyManager(proxyConfig)
+        proxyManager = PostgreSQLadvisoryLockBasedProxyManager<String, Any>(proxyConfig)
     }
 
     /**

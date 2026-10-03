@@ -1,1 +1,1 @@
-rootProject.name = "omni3d-backend"
+rootProject.name = "3dify"

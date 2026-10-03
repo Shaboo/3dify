@@ -2,17 +2,17 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 buildscript {
     dependencies {
-        classpath("org.flywaydb:flyway-database-postgresql:12.0.1")
+        classpath("org.flywaydb:flyway-database-postgresql:12.4.0")
     }
 }
 
 plugins {
-    id("org.springframework.boot") version "4.0.2"
+    id("org.springframework.boot") version "4.1.1"
     id("io.spring.dependency-management") version "1.1.7"
-    kotlin("jvm") version "2.3.10"
-    kotlin("plugin.spring") version "2.3.10"
-    id("org.flywaydb.flyway") version "12.0.1"
-    id("org.jooq.jooq-codegen-gradle") version "3.20.11"
+    kotlin("jvm") version "2.4.20"
+    kotlin("plugin.spring") version "2.4.20"
+    id("org.flywaydb.flyway") version "12.4.0"
+    id("org.jooq.jooq-codegen-gradle") version "3.21.7"
 }
 
 group = "com.omni3d"
@@ -20,15 +20,19 @@ version = "0.0.1-SNAPSHOT"
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(27)
     }
 }
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_25)
-        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+        jvmTarget.set(JvmTarget.JVM_26)
+        freeCompilerArgs.addAll("-Xjsr305=strict")
     }
+}
+
+tasks.withType<JavaCompile> {
+    options.release.set(26)
 }
 
 repositories {
@@ -45,8 +49,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("io.micrometer:micrometer-registry-prometheus")
-    implementation("com.bucket4j:bucket4j-core:8.10.0")
-    implementation("com.bucket4j:bucket4j-postgresql:8.10.0")
+    implementation("com.bucket4j:bucket4j-core:8.10.1")
+    implementation("com.bucket4j:bucket4j-postgresql:8.10.1")
 
     // --- Kotlin ---
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
@@ -54,8 +58,8 @@ dependencies {
 
     // --- Database ---
     implementation("org.postgresql:postgresql")
-    implementation("org.flywaydb:flyway-core:12.0.1")
-    implementation("org.flywaydb:flyway-database-postgresql:12.0.1")
+    implementation("org.flywaydb:flyway-core")
+    implementation("org.flywaydb:flyway-database-postgresql")
 
     // --- jOOQ ---
     implementation("org.jooq:jooq")

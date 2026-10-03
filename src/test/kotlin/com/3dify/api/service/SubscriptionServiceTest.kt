@@ -3,9 +3,11 @@ package com.omni3d.api.service
 import com.omni3d.api.domain.PlanEntity
 import com.omni3d.api.domain.SubscriptionWithPlanEntity
 import com.omni3d.api.exception.NotFoundException
+import com.omni3d.api.metrics.AppMetrics
 import com.omni3d.api.repository.ApiKeyRepository
 import com.omni3d.api.repository.PlanRepository
 import com.omni3d.api.repository.SubscriptionRepository
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -19,8 +21,9 @@ class SubscriptionServiceTest {
     private val subscriptionRepository: SubscriptionRepository = mockk()
     private val planRepository: PlanRepository = mockk()
     private val apiKeyRepository: ApiKeyRepository = mockk()
+    private val metrics = AppMetrics(SimpleMeterRegistry())
     private val service = SubscriptionService(
-        subscriptionRepository, planRepository, apiKeyRepository,
+        subscriptionRepository, planRepository, apiKeyRepository, metrics,
         webhookSecret = "whsec_test_stub"
     )
 
