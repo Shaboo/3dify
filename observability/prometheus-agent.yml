@@ -1,0 +1,33 @@
+# Grafana Alloy / Prometheus Agent config for scraping /actuator/prometheus
+# and remote-writing to Grafana Cloud.
+#
+# Replace <YOUR_GRAFANA_INSTANCE_ID>, <YOUR_GRAFANA_API_TOKEN>, and
+# <YOUR_PROMETHEUS_REMOTE_WRITE_URL> with your Grafana Cloud credentials.
+# The remote-write URL can be found at: Grafana Cloud > Prometheus > Details
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    application: omni3d-api
+    environment: prod
+
+scrape_configs:
+  - job_name: omni3d-spring-boot
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - backend:8080          # service name in docker network
+        labels:
+          service: api
+
+remote_write:
+  - url: https://prometheus-prod-<REGION>.grafana.net/api/prom/push
+    basic_auth:
+      username: <YOUR_GRAFANA_INSTANCE_ID>
+      password: <YOUR_GRAFANA_API_TOKEN>
+    write_relabel_configs:
+      # Drop high-cardinality histogram bucket labels that are rarely needed
+      - source_labels: [__name__]
+        regex: 'jvm_gc_.*|process_.*'
+        action: drop

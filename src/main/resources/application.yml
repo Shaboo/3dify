@@ -1,0 +1,103 @@
+spring:
+  application:
+    name: omni3d-api
+
+  # --- DataSource ---
+  datasource:
+    url: jdbc:postgresql://localhost:5432/omni3d
+    username: omni3d
+    password: omni3d
+    driver-class-name: org.postgresql.Driver
+
+  # --- Flyway (handled by FlywayConfig.kt) ---
+  flyway:
+    enabled: false
+
+  # --- jOOQ ---
+  jooq:
+    sql-dialect: POSTGRES
+
+  # --- RabbitMQ ---
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: omni3d
+    password: omni3d
+
+  # --- Redis ---
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  mvc:
+    log-request-details: false
+
+# --- Spring Actuator ---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${APP_ENV:local}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        omni3d.jobs.duration: true
+      slo:
+        http.server.requests: 50ms, 200ms, 500ms, 1s, 5s
+
+# --- Custom App Config ---
+omni3d:
+  jwt:
+    secret: "CHANGE_ME_IN_PRODUCTION_minimum_32_chars_long_secret_key_here!"
+    expiration-ms: 86400000  # 24 hours
+
+  r2:
+    endpoint: ""
+    access-key: ""
+    secret-key: ""
+    bucket: ""
+    token: ""
+
+  rabbitmq:
+    exchange: omni3d.exchange
+    queue: 3d_task_queue
+    routing-key: generate.3d
+
+  runpod:
+    api-url: "https://api.runpod.io/v2/endpoint/submit"
+    api-key: "runpod_test_key_placeholder"
+    webhook-url: "http://localhost:8080/internal/webhooks/runpod"
+
+# --- Stripe ---
+stripe:
+  secret-key: "${STRIPE_SECRET_KEY:sk_test_placeholder_replace_me}"
+  webhook-secret: "${STRIPE_WEBHOOK_SECRET:whsec_placeholder_replace_me}"
+
+server:
+  port: 8080
+
+# --- Logging ---
+logging:
+  level:
+    root: INFO
+    com.omni3d: DEBUG
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.jooq: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{jobId}%X{userId}%X{apiKeyId}] - %msg%n"

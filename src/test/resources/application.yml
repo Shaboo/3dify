@@ -1,0 +1,43 @@
+# Test-specific Spring Boot config
+# Overrides application.yml for the test environment.
+# Datasource, RabbitMQ and Redis are overridden via Testcontainers @DynamicPropertySource.
+
+spring:
+  # Disable auto-config for RabbitMQ in unit tests that don't start the full context
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+  flyway:
+    enabled: true   # Run migrations against the Testcontainer DB
+
+  jooq:
+    sql-dialect: POSTGRES
+
+# Suppress noisy AWS SDK logs in tests
+logging:
+  level:
+    root: WARN
+    com.omni3d: INFO
+    org.springframework.test: INFO
+    org.springframework.security: INFO
+    org.flywaydb: INFO
+
+# Stub Stripe values (overridden via @DynamicPropertySource where needed)
+stripe:
+  secret-key: sk_test_stub
+  webhook-secret: whsec_stub
+
+omni3d:
+  jwt:
+    secret: test-jwt-secret-must-be-at-least-256-bits-long-for-HS256-algorithm
+    expiration-ms: 3600000   # 1 hour
+  r2:
+    endpoint: http://localhost:9000
+    access-key: test-access-key
+    secret-key: test-secret-key
+    bucket: test-bucket
+  rabbitmq:
+    exchange: omni3d.exchange
+    queue: 3d_task_queue
+    routing-key: generate.3d

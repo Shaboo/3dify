@@ -1,0 +1,14 @@
+interface:
+  display_name: Wathiq DSA Engineering
+  short_description: Enforce Wathiq DDD and DSA boundaries
+  default_prompt: Use $wathiq-dsa to design and implement the next Wathiq change with
+    enforced DSA boundaries.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

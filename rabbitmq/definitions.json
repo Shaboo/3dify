@@ -1,0 +1,57 @@
+{
+    "users": [
+        {
+            "name": "omni3d",
+            "password_hash": "TC8wrQjEwCFm0aKl8g+UsxCs/nmFbqv0RoKkelIW7+aYu5ye",
+            "hashing_algorithm": "rabbit_password_hashing_sha256",
+            "tags": [
+                "administrator"
+            ],
+            "limits": {}
+        }
+    ],
+    "vhosts": [
+        {
+            "name": "/"
+        }
+    ],
+    "permissions": [
+        {
+            "user": "omni3d",
+            "vhost": "/",
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*"
+        }
+    ],
+    "exchanges": [
+        {
+            "name": "omni3d.exchange",
+            "vhost": "/",
+            "type": "direct",
+            "durable": true,
+            "auto_delete": false,
+            "internal": false,
+            "arguments": {}
+        }
+    ],
+    "queues": [
+        {
+            "name": "3d_task_queue",
+            "vhost": "/",
+            "durable": true,
+            "auto_delete": false,
+            "arguments": {}
+        }
+    ],
+    "bindings": [
+        {
+            "source": "omni3d.exchange",
+            "vhost": "/",
+            "destination": "3d_task_queue",
+            "destination_type": "queue",
+            "routing_key": "generate.3d",
+            "arguments": {}
+        }
+    ]
+}

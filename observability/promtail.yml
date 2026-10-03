@@ -1,0 +1,55 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+# ─── Grafana Cloud Loki endpoint ─────────────────────────────────────────────
+# Replace <YOUR_GRAFANA_INSTANCE_ID> and <YOUR_GRAFANA_API_TOKEN> with your
+# Grafana Cloud credentials (Settings > API Keys in the Grafana Cloud portal).
+clients:
+  - url: https://logs-prod-<REGION>.grafana.net/loki/v1/push
+    basic_auth:
+      username: <YOUR_GRAFANA_INSTANCE_ID>
+      password: <YOUR_GRAFANA_API_TOKEN>
+    tenant_id: omni3d
+
+scrape_configs:
+  # ── Backend API logs ────────────────────────────────────────────────────────
+  - job_name: omni3d-backend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: omni3d-backend
+          service: api
+          environment: prod
+          __path__: /var/log/omni3d/backend.log
+
+    pipeline_stages:
+      # Parse multi-line Spring Boot stack traces as a single log entry
+      - multiline:
+          firstline: '^\d{4}-\d{2}-\d{2}'
+          max_wait_time: 3s
+
+      # Parse the log pattern set in application.yml
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<thread>[^\]]+)\] (?P<level>[A-Z]+) +(?P<logger>[^ ]+) \[(?P<context>[^\]]*)\] - (?P<message>.*)$'
+
+      # Promote log level as a Loki label for filtering
+      - labels:
+          level:
+          logger:
+
+      # Set the log timestamp from the log line itself
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02 15:04:05.000'
+
+      # Extract job ID from MDC context for use in log queries
+      - regex:
+          source: context
+          expression: 'jobId=(?P<jobId>[a-f0-9-]+)'
+      - labels:
+          jobId:
