@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+ktlint_code_style = intellij_idea
+# The requested com.3dify namespace uses a valid escaped Kotlin identifier.
+ktlint_standard_package-name = disabled
+
+[Makefile]
+indent_style = tab

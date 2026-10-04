@@ -1,0 +1,48 @@
+package com.`3dify`.application.service.generation.submit
+
+import com.`3dify`.application.service.generation.submit.GenerateResult
+import com.`3dify`.domain.generation.GenerationPolicy
+import com.`3dify`.domain.generation.GenerationTaskPublisher
+import com.`3dify`.domain.generation.ImageStorage
+import com.`3dify`.domain.job.JobHistoryRepository
+import com.`3dify`.domain.job.JobRepository
+import com.`3dify`.domain.transaction.TransactionProvider
+import com.`3dify`.shared.metrics.AppMetrics
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
+import org.springframework.stereotype.Service
+import java.util.UUID
+
+@Service
+class GenerateModelApplicationService(
+    private val storage: ImageStorage,
+    private val jobs: JobRepository,
+    private val history: JobHistoryRepository,
+    private val publisher: GenerationTaskPublisher,
+    private val transactions: TransactionProvider,
+    private val policy: GenerationPolicy,
+    private val metrics: AppMetrics,
+) {
+    private val log = LoggerFactory.getLogger(javaClass)
+    fun execute(command: GenerateModelCommand): GenerateResult {
+        policy.ensureImagesPresent(command.image1.data.size, command.image2.data.size)
+        val key1 = policy.inputKey(command.image1.filename)
+        val key2 = policy.inputKey(command.image2.filename)
+        storage.upload(key1, command.image1.data, command.image1.contentType)
+        storage.upload(key2, command.image2.data, command.image2.contentType)
+        return transactions.transaction {
+            val id = UUID.randomUUID()
+            MDC.put("jobId", id.toString())
+            try {
+                jobs.insert(id, command.apiKeyId, key1, key2)
+                history.insert(id, "PENDING", "Job created")
+                publisher.enqueue(id, key1, key2)
+                metrics.jobsCreated.increment()
+                log.info("Job {} created and queued in outbox", id)
+                GenerateResult(id, "PENDING")
+            } finally {
+                MDC.remove("jobId")
+            }
+        }
+    }
+}
