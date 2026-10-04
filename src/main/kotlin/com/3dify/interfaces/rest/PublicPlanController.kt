@@ -1,6 +1,7 @@
-package com.omni3d.interfaces.rest
+package com.`3dify`.interfaces.rest
 
-import com.omni3d.application.service.PlanService
+import com.`3dify`.application.service.plan.listactive.ListActivePlansApplicationService
+import com.`3dify`.interfaces.rest.dto.toResponse
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
@@ -8,7 +9,7 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 @RequestMapping("/public/plans")
 class PublicPlanController(
-    private val planService: PlanService
+    private val listActivePlans: ListActivePlansApplicationService,
 ) {
 
     /**
@@ -16,5 +17,5 @@ class PublicPlanController(
      * Used by the landing page to render dynamic pricing cards — no auth required.
      */
     @GetMapping
-    fun listActivePlans() = planService.listAllActive()
+    fun listActivePlans() = listActivePlans.execute().map { it.toResponse() }
 }

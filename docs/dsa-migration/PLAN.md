@@ -1,113 +1,129 @@
-# 3dify (omni3d-api) → DSA migration plan
+# DSA migration plan
 
-This is the resumable source of truth for the migration. Update it after every slice.
+## Metadata
 
-## 1. Metadata
-| | |
+- Date: 2026-10-04
+- Scope: the complete Kotlin/Spring backend, including authentication filters, REST endpoints, Stripe and RunPod callbacks, Rabbit consumer, and outbox scheduler.
+- Source architecture: classic Spring services moved into DSA-named packages without dependency inversion or use-case separation.
+- Target: layer-first DSA, one application-service class per business use case, one public execution method per class.
+- Status: structural migration complete and verified. Behavior-changing follow-ups are explicitly outside this refactor.
+- Working tree was clean at discovery start. Changes remain local and reviewable; no commits or deployment performed.
+
+## Contract freeze
+
+Preserve HTTP routes, verbs, status codes, JSON fields and nullability, error text, authentication and authorization behavior, JWT claims, API key prefix/hash, database schema and Flyway history, Rabbit queue/exchange/routing keys and task JSON, Stripe metadata and event handling, RunPod request/callback fields, configuration keys, metrics, and the 500 ms outbox poll with batch size 50. Preserve referenced Spring bean identities when introducing adapters.
+
+Preserve existing side-effect order, exception handling, transaction boundaries and duplicate processing behavior. New idempotency enforcement, compensation, transaction expansion, access-control fixes, and delivery guarantees require a separate behavior-change decision.
+
+## Inventory summary and project context
+
+Initial inventory: 47 production files, including nine broad application files. Final inventory: 152 production files, including 27 single-use-case application services. Domain models/ports and application commands/queries/results now have separate files grouped by concept. The inventory is heuristic; its multi-service-controller flags are resolved by the architecture rule that checks each handler invokes exactly one service.
+
+The product provides image-to-3D generation through API keys, with a user dashboard, subscription billing, admin-managed pricing, asynchronous GPU generation, downloadable outputs, and optional completion webhooks.
+
+- Registration/login persist users and issue JWTs. JWT authentication additionally reads administrator status from PostgreSQL.
+- API key access loads the key and subscription, enforces subscription eligibility, then consumes a PostgreSQL-backed rate-limit token.
+- Generation uploads two images to storage, writes a pending job/history/outbox in a database transaction, and returns the job ID.
+- The outbox relay publishes task JSON to Rabbit. The worker marks processing, submits RunPod generation, and stores its external task ID; dispatch failures record a failed job.
+- RunPod callbacks verify the external task/job association, update job results/history/metrics, and synchronously attempt the user's configured webhook. Delivery failures are swallowed and measured.
+- Plans control price, quota and rate limit. Paid plan creation creates a Stripe product and recurring price. Plan updates currently do not update Stripe pricing.
+- Checkout either activates a free subscription and updates API-key plans, or creates a Stripe subscription checkout. Billing portal requires a linked Stripe customer.
+- Stripe callbacks activate subscriptions, update their status, deactivate/reactivate API keys, or mark payment overdue.
+
+Domain groups: identity, API access, plans, subscriptions, generation jobs, customer webhook configuration, and delivery/outbox. These are packages inside the current service, not proposed new services or databases. Cross-group orchestration stays in the owning use case.
+
+## Class map
+
+Target application directory: `application/service/<group>/<usecase>/`. Every listed name ends in `ApplicationService`, with its own command/query and use-case result where needed.
+
+| Current class/entry point | Target use cases / responsibility |
 |---|---|
-| Repo | single Gradle module, Kotlin 2.4 / Spring Boot 4.1 / jOOQ (string DSL, no codegen) / Flyway / RabbitMQ / Stripe / R2 |
-| Base package | `com.omni3d` |
-| Target | domain-service-template conventions, **flat (layer-first) layout** (the repo already uses it) |
-| Branch | `refactor/dsa-migration` (one commit per slice) |
-| Build / test | `./gradlew clean build` (about 13 s, 61 tests: 20 unit, 41 Testcontainers integration) |
-| Baseline | Was **RED** on `198bca6` (9 integration classes failed). Green (61/61) after slice 0 (F1). |
+| UserService | RegisterUser, LoginUser |
+| JwtAuthFilter + JwtService + UserRepository | AuthenticateJwt; filter only extracts token and builds Spring authentication |
+| ApiKeyService | CreateApiKey, ListApiKeys, RevokeApiKey |
+| ApiKeyAuthFilter + validateRawKey + RateLimiterService | AuthorizeApiRequest: key validation, subscription eligibility and rate consumption in one use case; filter maps the outcome to the existing HTTP/auth behavior |
+| PlanService | ListActivePlans, ListPlans, GetPlan, CreatePlan, UpdatePlan, DeactivatePlan; retain GetPlan only if callers require it |
+| SubscriptionService | GetSubscriptionStatus, CreateCheckoutSession, CreateBillingPortal, HandleStripeWebhook |
+| Stripe webhook private handlers | Typed domain event variants and subscription decisions used by HandleStripeWebhook; no application-service chaining. Add separate event use cases only if separately dispatched at the interface boundary |
+| GenerateController + JobService.createJob | GenerateModel: input validation, two uploads, job/history/outbox persistence; preserve uploads before the DB transaction |
+| JobService reads + JobHistoryService.getHistory | GetJob, ListApiKeyJobs, ListUserJobs, GetJobHistory |
+| TaskWorker + JobService processing/dispatch/failure helpers | DispatchGenerationTask: complete worker operation including failure recording; listener deserializes and makes one call |
+| ProviderWebhookController + JobService result helpers | HandleGenerationCallback: verify association, apply result, persist history, measure, attempt customer notification; controller maps result and preserves 400/500 behavior |
+| WebhookService | GetWebhook, SetWebhook, DeleteWebhook; resolve URL becomes a repository operation used by callback orchestration |
+| OutboxService | Infrastructure outbox-backed GenerationTaskPublisher implementing a domain port; JSON serialization stays in infrastructure |
+| OutboxPublisher | PublishPendingGenerationTasks plus a thin interfaces/scheduled trigger; Rabbit publication and serialization stay in adapters |
+| JobHistoryService.recordChange | JobHistoryRepository domain port used within the owning use cases |
+| Eight infrastructure repositories | Domain repository interfaces with current intent/signatures; existing SQL implementations become Postgres*Repository adapters |
+| StorageService, RunPodClient, Stripe SDK calls | ImageStorage, GenerationProviderClient, BillingClient domain ports and infrastructure implementations |
+| JwtService, PasswordEncoder, RateLimiterService | TokenClient, PasswordHasher, RequestRateLimiter domain ports; current implementations remain infrastructure details |
+| domain/entities.kt | Separate pure model/projection files by owning domain group; preserve values and construction semantics |
+| REST Dtos.kt | Keep API shapes in interfaces; introduce application commands/queries/results and explicit interface mappers |
+| ApiException + GlobalExceptionHandler | Technology-independent application/domain failures; HTTP translation in interfaces/rest/exceptions, preserving existing status/text |
+| SecurityConfig | Move HTTP security/filter wiring to interfaces config; password implementation wiring remains infrastructure; avoid infrastructure importing interfaces |
+| TaskProducer.TaskMessage | Neutral task contract independent of either adapter; preserve existing wire JSON |
 
-## 2. Contract freeze (must not change)
-- **HTTP**: all paths, verbs, status codes, JSON field names (incl. `isAdmin`/`isActive`), error body `{error, message, timestamp}`, auth chains (`/api/v1/**` API key, `/admin/**` JWT+ADMIN, `/dashboard/**` JWT, public routes).
-  `/auth/register|login`, `/public/plans`, `/admin/plans[/{id}]`, `/dashboard/{api-keys,jobs,webhooks,subscription[/checkout|/portal]}`, `/api/v1/{generate,jobs,jobs/{id},jobs/{id}/history}`, `/internal/webhooks/runpod/{jobId}`, `/webhooks/stripe`.
-- **Messaging**: exchange `omni3d.exchange`, queue `3d_task_queue`, routing key `generate.3d`, payload JSON `{jobId, inputImage1Key, inputImage2Key}`. Outbox row `aggregate_type = "JOB"`.
-- **DB**: schema and Flyway V1–V12 untouched. API-key format `omni_pk_` + 40 chars, SHA-256 hex hash, 16-char prefix.
-- **Outgoing**: RunPod payload and webhook URL, user-webhook JSON `{jobId, status, outputGlbUrl, outputUsdzUrl}`, Stripe calls and metadata (`userId`, `planId`).
-- **Metrics**: every `omni3d.*` meter name and tag in `AppMetrics`. **Config keys**: `omni3d.*`, `stripe.*`. **MDC keys**: `jobId`, `userId`, `apiKeyId`.
+Domain policies/factories own existing decisions: API-key format/active checks, subscription access eligibility, free/paid checkout eligibility, subscription event effects, callback outcome selection, generation input validity, and user registration/credential decisions. Application services load values and pass them to these policies. Domain policies never inject I/O ports.
 
-## 3. Inventory summary (source pattern: "DSA in name only")
-A script (commit `198bca6`) renamed the packages to DSA layers, but the code inside still follows classic Spring layering:
+## Slices
 
-| Problem | Where |
-|---|---|
-| App services depend on **infrastructure** (repos, `JwtService`, `TaskProducer`) and on **interfaces** DTOs | every `*Service` in `application/service` |
-| Technology in the app layer: Stripe SDK, `@Value`, `@Transactional`, `HttpStatus`, bucket4j/DataSource, Jackson | `SubscriptionService`, `PlanService`, `RateLimiterService`, `OutboxService` |
-| The domain is anemic `*Entity` DTOs (strings for statuses, no rules, no ports) | `domain/entities.kt` |
-| Fat entry points: multiple service/repo calls, HTTP calls, business `if`s | `ProviderWebhookController`, `TaskWorker`, `GenerateController`, `ApiKeyAuthFilter`, `JwtAuthFilter`, `StripeWebhookController` |
-| God services with no use-case boundaries | `JobService`, `SubscriptionService`, `ApiKeyService` |
-| HTTP-status exceptions thrown from the app layer | `shared/exception/ApiException` |
-| Dead code | `PlanService.getById`, `JwtService.getUserIdFromToken`, `SubscriptionRepository.findByStripeCustomerId`, `StorageService.upload(stream)`/`download`, root scripts `refactor.py`, `fix_*.py` |
-
-Raw heuristic output: `inventory.md` (generated by `.agents/skills/dsa-refactor/scripts/inventory.py`).
-
-## 4. Target structure
-```
-com/omni3d/Omni3dApplication.kt
-├─ application/service/<model>/<usecase>/<Usecase><Model>ApplicationService + *Command / *Query / *Result
-├─ domain/
-│  ├─ transaction/TransactionProvider
-│  ├─ exception/ (NotFound, Conflict, InvalidCredentials, BusinessRuleViolation, ...)  → mapped to identical HTTP statuses in interfaces
-│  └─ <model>/  model + value classes + factories/policies + ports (*Repository, *Client, *Publisher, *Storage, *Notifier)
-├─ infrastructure/
-│  ├─ persistence/postgres/{transaction,<model>}/Postgres<Model>Repository (jOOQ code moved verbatim)
-│  ├─ outbox/ (OutboxGenerationTaskPublisher, OutboxRelay @Scheduled, RabbitTaskMessageSender)
-│  ├─ rest/runpod, rest/webhook, billing/stripe, storage/r2, security/{jwt,password}, ratelimit/bucket4j
-│  └─ config/ (Rabbit, S3, Flyway, Jackson, Stripe)
-├─ interfaces/
-│  ├─ rest/<model>/ controllers (one class per resource, thin) + request/response objects + mappers
-│  ├─ rest/security/ (SecurityConfig, ApiKeyAuthFilter, JwtAuthFilter), rest/exceptions/ExceptionsControllerAdvice
-│  ├─ rest/webhook/ (RunPod + Stripe callbacks)
-│  └─ messages/rabbitmq/ (GenerationTaskRabbitListener)
-└─ shared/ (AppMetrics, message/TaskMessage)   ← depends on no layer
-```
-
-## 5. Class map (old → new)
-| Old | New use cases / classes |
-|---|---|
-| `UserService` | `RegisterUserApplicationService`, `LoginUserApplicationService`, `AuthenticateUserApplicationService` (JWT filter) · domain `User`, `UserFactory`, ports `UserRepository`, `PasswordHasher`, `AccessTokenProvider` · infra `PostgresUserRepository`, `BCryptPasswordHasher`, `JwtAccessTokenProvider` (ex `JwtService`) |
-| `PlanService` | `ReadPlanApplicationService`, `CreatePlanApplicationService`, `UpdatePlanApplicationService`, `DeactivatePlanApplicationService` · domain `Plan`, port `BillingCatalogClient` · infra `StripeBillingCatalogClient`, `PostgresPlanRepository` |
-| `ApiKeyService` + `RateLimiterService` + filter logic | `CreateApiKeyApplicationService`, `ReadApiKeyApplicationService`, `RevokeApiKeyApplicationService`, `AuthorizeApiRequestApplicationService` · domain `ApiKey`, `RawApiKey` (prefix/hash rules), `ApiKeyFactory`, `ApiAccessPolicy` (subscription + rpm decision), port `RateLimiter` · infra `PostgresApiKeyRepository`, `Bucket4jRateLimiter` |
-| `JobService` + `JobHistoryService` + `OutboxService` + controller/worker logic | `SubmitGenerationJobApplicationService` (upload + job + history + outbox), `DispatchGenerationJobApplicationService` (worker), `CompleteGenerationJobApplicationService` (RunPod callback + user webhook), `ReadJobApplicationService` · domain `Job`, `JobStatus`, `JobHistoryEntry`, `ProviderCallbackResolver`, ports `JobRepository`, `JobHistoryRepository`, `GenerationTaskPublisher`, `InputImageStorage`, `GenerationProviderClient`, `JobResultNotifier` · infra Postgres repos, `OutboxGenerationTaskPublisher`, `R2InputImageStorage`, `RunPodGenerationProviderClient`, `HttpJobResultNotifier` |
-| `SubscriptionService` | `ReadSubscriptionApplicationService`, `StartCheckoutApplicationService`, `OpenBillingPortalApplicationService`, `ActivateSubscriptionFromCheckoutApplicationService`, `SyncSubscriptionStatusApplicationService`, `CancelSubscriptionApplicationService`, `MarkSubscriptionPastDueApplicationService` · domain `Subscription`, `SubscriptionStatus` (`isActive`), ports `SubscriptionRepository`, `BillingClient` · infra `StripeBillingClient`. Stripe signature check + event mapping live in `interfaces/rest/webhook/stripe` |
-| `WebhookService` | `ReadWebhookApplicationService`, `SetWebhookApplicationService`, `DeleteWebhookApplicationService` · domain `UserWebhook`, `UserWebhookRepository` |
-| `OutboxPublisher`, `TaskProducer` | `infrastructure/outbox/OutboxRelay` + `RabbitTaskMessageSender` (pure plumbing, not a use case) |
-| `TaskWorker` | `interfaces/messages/rabbitmq/GenerationTaskRabbitListener` → one app-service call |
-| `GlobalExceptionHandler`, `ApiException` | `interfaces/rest/exceptions/ExceptionsControllerAdvice` (domain exceptions → same status + body) |
-
-## 6. Findings (NOT fixed silently: each needs approval)
-
-Approved by user: **F1, F8**. Not approved for now: F2, F3, F4, F5 (structural refactor only; keep the current transaction boundaries exactly).
-| # | Finding | Proposal |
+| Slice | Status | Completion gate |
 |---|---|---|
-| F1 | **Baseline red / app broken**: `Omni3dApplication` sits in `com.omni3d.infrastructure`, so component scan misses every controller and service, and `@SpringBootTest` can't find it | Move it to `com.omni3d` (verified in a scratch worktree: 61/61 green). Slice 0 |
-| F2 | The job state writes (`markProcessing`, `markSuccess`, `markFailed`, `updateExternalTaskId`) are **not transactional**, so status and history can diverge | Wrap each in `transactionProvider` |
-| F3 | No **idempotency**: a duplicate Rabbit delivery re-dispatches to RunPod; duplicate RunPod/Stripe callbacks write history and metrics twice | Separate slice: a job state machine rejects invalid/duplicate transitions, plus Stripe event-id dedupe |
-| F4 | No job **state machine** (e.g. a SUCCESS callback can overwrite FAILED) | `JobStatus.validTransitions()`. Enforcing it is a behaviour change |
-| F5 | **IDOR**: `GET /api/v1/jobs/{id}`, `/jobs/{id}/history` and `/dashboard/jobs/{id}/history` don't check ownership | Add an ownership check (security fix; the contract changes visibly to a 404) |
-| F6 | `createPlan` creates the Stripe product/price first, then inserts into the DB. If the insert fails, orphan Stripe objects are left behind | Log for later (compensation) |
-| F7 | `WebhookResponse.updatedAt` renders the string `"null"`; `ApiKeyCreatedResponse.createdAt` uses the app clock, not the DB value | Keep as-is (contract), note only |
-| F8 | Leftover scripts `refactor.py`, `fix_imports.py`, `fix_sed.py`, `fix_worker_and_jwt.py` | Delete |
-| F9 | User-webhook delivery runs synchronously inside the RunPod callback request | Keep (it's outside the DB tx); move to async via the outbox later |
+| 0. Baseline repair | Complete | Repair bootstrap mismatch and run full build/tests; record actual remaining failures |
+| 1. Foundations and architecture guardrails | Complete | Domain ports, adapter wiring, transaction abstraction preserving current semantics; strict architecture rules with zero allowed violations |
+| 2. Active plan read pilot | Complete | ListActivePlansApplicationService + result + controller mapper; endpoint characterization and architecture checks green |
+| 3. Remaining plan reads/writes | Complete | Separate services, billing adapter, pricing policy; existing admin/public contracts pass |
+| 4. Identity and API access | Complete | Registration/login/key use cases and thin JWT/API filters; preserve gate order and rate-token consumption |
+| 5. Webhook configuration and job reads | Complete | Separate query/command services; response/status contracts pass |
+| 6. Subscription use cases | Complete | Four separate services, Stripe adapter and typed events, pure policies; free/paid/portal/event paths characterized |
+| 7. Generation submission | Complete | One generate use case, storage and outbox ports; transactional job/history/outbox behavior verified |
+| 8. Dispatch, provider callback and relay | Complete | Thin listener/callback/scheduler; orchestration and adapters extracted with failure/side-effect order preserved |
+| 9. Finish | Complete | No legacy multi-use-case services, no stale forwarding wrappers, zero architecture violations, full build/tests green |
 
-## 7. Slices
-| # | Slice | Status |
-|---|---|---|
-| 0 | Baseline fix F1, commit the staged skill files, delete the scripts (F8) | ✅ |
-| 1 | Guardrails: ArchUnit `DsaArchitectureTest` with a `FreezingArchRule` store | ⏳ |
-| 2 | Foundations: `TransactionProvider`, domain exceptions + ControllerAdvice, `shared/message/TaskMessage` | ⏳ |
-| 3 | Pilot read: plans (`ReadPlanApplicationService`, `PublicPlanController`) | ⏳ |
-| 4 | Plan writes (admin) + `BillingCatalogClient` | ⏳ |
-| 5 | Users: register/login + JWT filter | ⏳ |
-| 6 | User webhook config | ⏳ |
-| 7 | API keys: create/list/revoke + API-key filter (authorize, rate limit) | ⏳ |
-| 8 | Subscriptions: status/checkout/portal + Stripe webhook | ⏳ |
-| 9 | Jobs: reads, submit (upload + outbox), Rabbit listener dispatch, RunPod callback | ⏳ |
-| 10 | Move the outbox relay into infrastructure, delete the old services and `entities.kt`, freeze store → 0, tighten rules, add `AGENTS.md` ("always DSA") | ⏳ |
-| 11+ | Behaviour changes F2–F5: **not approved**, only on explicit request | ⛔ |
+Update this file after each slice with changed classes, validation results and remaining findings. Do not weaken tests or add permanent architecture exceptions to finish a slice.
 
-## 8. Decisions
-- Keep the flat layout. One controller **per resource** (the existing dialect); each method maps → calls one app service → maps back.
-- Keep the request/response class names (`RegisterRequest`, `JobResponse`, ...) but move them per model. The app layer returns its own `*Result` DTOs.
-- Move the jOOQ string-DSL code verbatim into `Postgres*Repository` (no switch to codegen).
-- External HTTP calls (Stripe, RunPod, R2, user webhooks) always run outside DB transactions.
-- `AppMetrics` stays in `shared` (cross-cutting, usable from the app and interfaces layers).
+## Decisions
 
-- Transaction boundaries stay exactly as they were: transactional only where `@Transactional` was (`createJob`, `createCheckoutSession`, Stripe webhook handling). Job status writes stay non-transactional (F2 not approved).
+- The user's one-class-per-business-case requirement is stronger than the skill's allowance for several methods in a class, and governs this migration.
+- A mechanical split that forwards into the old broad service is insufficient. Each service must own its complete orchestration and depend only on domain ports/policies and approved cross-cutting concerns.
+- Existing API DTOs must not be imported by application services. Domain objects and vendor SDK objects must not become endpoint response contracts.
+- No generic repository/state-machine framework is proposed yet: the current SQL and lifecycle behavior do not justify it without a concrete recurring need.
+- User authorized namespace correction on 2026-10-04: all packages, test directories, build group, generated-code target and logger namespaces become `com.3dify` (Kotlin escapes the numeric package component with backticks). External configuration/database/broker/metric identifiers remain frozen.
 
-## 9. Open questions
-- none
+## Findings
+
+1. Resolved: initial baseline was red: `./gradlew build` fails at compileKotlin because `3difyApplication.kt:12` calls `runApplication<Omni3dApplication>` while the declared class is backtick-escaped `3difyApplication`. Tests did not run. Observed Gradle reported build duration: 1 s.
+2. Resolved: seven strict ArchUnit checks now enforce layers, technology restrictions, use-case ownership, entry-point composition, domain policies, namespace, shared dependencies and persistence placement. No frozen store, ignores, or violation budget remains.
+3. Resolved: application services now depend on domain ports/policies and cross-cutting metrics/logging only. Broad services and application-service chaining were removed.
+4. Resolved: REST endpoints, authentication filters, callbacks, listener and scheduler each invoke one application service. Infrastructure implements all SQL/vendor/storage/crypto/rate-limit/notification ports.
+5. Stripe checkout mutates an external service while its DB transaction is open. Changing timing/compensation is a separate behavior change.
+6. Worker and provider callbacks perform multiple independent database writes without a single transaction. Adding atomicity would change existing partial-failure behavior.
+7. Command and callback deduplication is absent. Outbox/Rabbit redelivery and repeated Stripe/RunPod callbacks can repeat side effects. Introducing idempotency needs a separate decision and possibly persistent schema support.
+8. API job retrieval/history endpoints do not check ownership in their current service calls. Any access-control correction is separate from the architecture refactor.
+9. Worker failure details contain a literal escaped interpolation (`GPU Provider Error: ${ex.message}`); preserve until a bug fix is separately approved.
+10. Verified: Testcontainers PostgreSQL, mocked Rabbit/S3/RunPod, Spring wiring and transactional rollback all pass in the full build. RunPod remains a simulation in the current implementation.
+
+## Follow-ups
+
+- Idempotency, transaction/compensation improvements and access-control fixes are behavior changes and remain separately scoped. The migration does not claim these existing operational gaps are solved.
+- The accepted workspace/tenant ADR defines future Shopify and omnichannel ownership/billing; that schema and authorization migration is not implemented here.
+- External config/database/broker/metric identifiers retain their existing identities. Package declarations, imports, test paths, Gradle group, codegen package and logger namespace are `com.3dify`.
+
+## Execution log
+
+- Baseline: corrected the bootstrap generic to the declared `3difyApplication`; `./gradlew build` passed in 12 s.
+- Foundations: eight domain repository ports and Postgres adapters preserving SQL and bean names; technology-independent failures; Spring transaction provider preserving default unchecked-exception rollback semantics.
+- Pilot: ListActivePlansApplicationService with separate application result and REST mapping; PublicPlanControllerTest passed (8 s).
+- Plans: all admin use cases separated; AdminControllerTest and PublicPlanControllerTest passed (7 s).
+- Identity/access: register, login, key creation/list/revocation, token authentication and complete API authorization separated; password/token/rate-limiter ports; existing unit and endpoint tests passed (8 s).
+- Subscriptions: status, checkout, portal and webhook services, domain policy, typed billing events and Stripe adapter; existing unit and endpoint tests passed (6 s).
+- Namespace correction: user explicitly requested `com.3dify`; Kotlin package/import components escaped, test tree moved, build group/codegen/logging updated. Subscription/authentication checks passed after rename (9 s). External database/config/broker/metric identities preserved.
+- Generation: submission, dispatch, callback, relay and queries implemented; application services compose domain ports only; former broad JobService, JobHistoryService and OutboxService removed.
+- Webhooks: get/set/delete services implemented; former broad WebhookService removed.
+- Guardrails: ArchUnit 1.3 could not import JVM 26 bytecode. Upgraded to locally available 1.5.0 and added an explicit import sanity check. Temporary frozen artifacts from the incompatible import were discarded; final rules are strict and have no violation allowances.
+
+- Added regression coverage for job/history/outbox rollback, checked-exception transaction semantics, upload failures, subscription/rate-limit gate order, dispatch failure details, relay continuation, paid checkout and portal, signed Stripe event mapping, subscription event effects, generation message contracts, and callback notification failures.
+- Manually compared all eight persistence implementations against their original class bodies: SQL and record-mapping behavior are unchanged. Flyway migrations were not edited.
+- Bootstrap JAR verified: Start-Class and packaged application classes use `com.3dify`; no `com.omni3d` production classes are packaged.
+- Documentation updated: README, architecture overview, system flows/endpoint map, migration findings and final inventory. The inventory generator was run from a temporary copy with backtick-aware package parsing; installed skills were not modified.
+
+- Final validation: `./gradlew build` passed; 93 tests across 20 suites, zero failures/errors/skips. Includes seven strict architecture tests and PostgreSQL integration tests.

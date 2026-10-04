@@ -13,10 +13,29 @@ plugins {
     kotlin("plugin.spring") version "2.4.20"
     id("org.flywaydb.flyway") version "12.4.0"
     id("org.jooq.jooq-codegen-gradle") version "3.21.7"
+    id("com.diffplug.spotless") version "8.10.3"
 }
 
-group = "com.omni3d"
+group = "com.3dify"
 version = "0.0.1-SNAPSHOT"
+
+val localDatabaseUrl = providers.environmentVariable("DB_URL").getOrElse("jdbc:postgresql://localhost:5432/3dify")
+val localDatabaseUser = providers.environmentVariable("DB_USER").getOrElse("3dify")
+val localDatabasePassword = providers.environmentVariable("DB_PASSWORD").getOrElse("3dify")
+
+spotless {
+    kotlin {
+        target("src/**/*.kt")
+        targetExclude("**/generated/**")
+        ktlint("1.8.0")
+            .setEditorConfigPath("$projectDir/.editorconfig")
+            .editorConfigOverride(mapOf("ktlint_standard_package-name" to "disabled"))
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        ktlint("1.8.0")
+    }
+}
 
 java {
     toolchain {
@@ -77,6 +96,7 @@ dependencies {
     implementation("com.stripe:stripe-java:26.3.0")
 
     // --- Test ---
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
@@ -89,9 +109,9 @@ dependencies {
 
 // --- Flyway Config (for Gradle plugin usage) ---
 flyway {
-    url = "jdbc:postgresql://localhost:5432/omni3d"
-    user = "omni3d"
-    password = "omni3d"
+    url = localDatabaseUrl
+    user = localDatabaseUser
+    password = localDatabasePassword
     schemas = arrayOf("public")
 }
 
@@ -100,9 +120,9 @@ jooq {
     configuration {
         jdbc {
             driver = "org.postgresql.Driver"
-            url = "jdbc:postgresql://localhost:5432/omni3d"
-            user = "omni3d"
-            password = "omni3d"
+            url = localDatabaseUrl
+            user = localDatabaseUser
+            password = localDatabasePassword
         }
         generator {
             name = "org.jooq.codegen.KotlinGenerator"
@@ -120,11 +140,15 @@ jooq {
                 isKotlinNotNullRecordAttributes = true
             }
             target {
-                packageName = "com.omni3d.api.generated"
-                directory = "src/main/kotlin"
+                packageName = "com.3dify.infrastructure.persistence.generated"
+                directory = "build/generated-src/jooq/main"
             }
         }
     }
+}
+
+kotlin.sourceSets.named("main") {
+    kotlin.srcDir("build/generated-src/jooq/main")
 }
 
 tasks.withType<Test> {

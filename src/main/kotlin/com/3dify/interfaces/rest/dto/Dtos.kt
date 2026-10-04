@@ -1,4 +1,4 @@
-package com.omni3d.interfaces.rest.dto
+package com.`3dify`.interfaces.rest.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.util.UUID
@@ -7,33 +7,33 @@ import java.util.UUID
 data class RegisterRequest(
     val email: String,
     val password: String,
-    val name: String? = null
+    val name: String? = null,
 )
 
 data class LoginRequest(
     val email: String,
-    val password: String
+    val password: String,
 )
 
 data class AuthResponse(
     val token: String,
     val userId: UUID,
     val email: String,
-    @JsonProperty("isAdmin") val isAdmin: Boolean = false
+    @JsonProperty("isAdmin") val isAdmin: Boolean = false,
 )
 
 // --- API Key ---
 data class CreateApiKeyRequest(
     val label: String? = null,
-    val planName: String = "free"
+    val planName: String = "free",
 )
 
 data class ApiKeyCreatedResponse(
     val id: UUID,
-    val key: String,       // raw key — shown ONCE
+    val key: String, // raw key — shown ONCE
     val label: String?,
     val planName: String,
-    val createdAt: String
+    val createdAt: String,
 )
 
 data class ApiKeyResponse(
@@ -43,25 +43,25 @@ data class ApiKeyResponse(
     val planName: String,
     @JsonProperty("isActive") val isActive: Boolean,
     val createdAt: String,
-    val revokedAt: String?
+    val revokedAt: String?,
 )
 
 // --- Webhook ---
 data class SetWebhookRequest(
-    val url: String
+    val url: String,
 )
 
 data class WebhookResponse(
     val id: UUID,
     val url: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
 )
 
 // --- Generate / Jobs ---
 data class GenerateResponse(
     val jobId: UUID,
-    val status: String
+    val status: String,
 )
 
 data class JobResponse(
@@ -73,7 +73,7 @@ data class JobResponse(
     val outputUsdzUrl: String?,
     val errorMessage: String?,
     val createdAt: String,
-    val completedAt: String?
+    val completedAt: String?,
 )
 
 // --- Job History ---
@@ -82,7 +82,7 @@ data class JobHistoryEntry(
     val jobId: UUID,
     val status: String,
     val details: String?,
-    val createdAt: String
+    val createdAt: String,
 )
 
 // --- Plans ---
@@ -97,7 +97,7 @@ data class PlanResponse(
     val monthlyQuota: Int,
     val sortOrder: Int,
     val stripePriceId: String?,
-    @JsonProperty("isActive") val isActive: Boolean
+    @JsonProperty("isActive") val isActive: Boolean,
 )
 
 data class CreatePlanRequest(
@@ -108,7 +108,7 @@ data class CreatePlanRequest(
     val monthlyQuota: Int,
     val priceCents: Int,
     val currency: String = "usd",
-    val sortOrder: Int = 99
+    val sortOrder: Int = 99,
 )
 
 data class UpdatePlanRequest(
@@ -117,7 +117,7 @@ data class UpdatePlanRequest(
     val priceCents: Int? = null,
     val rateLimitRpm: Int? = null,
     val monthlyQuota: Int? = null,
-    val sortOrder: Int? = null
+    val sortOrder: Int? = null,
 )
 
 // --- Subscriptions ---
@@ -128,23 +128,23 @@ data class SubscriptionStatusResponse(
     val priceCents: Int?,
     val status: String?,
     val currentPeriodEnd: String?,
-    @JsonProperty("isActive") val isActive: Boolean
+    @JsonProperty("isActive") val isActive: Boolean,
 )
 
 data class CreateCheckoutRequest(
     val planId: UUID,
     val successUrl: String,
-    val cancelUrl: String
+    val cancelUrl: String,
 )
 
 data class CheckoutResponse(
-    val checkoutUrl: String
+    val checkoutUrl: String,
 )
 
 data class PortalRequest(
-    val returnUrl: String
+    val returnUrl: String,
 )
 
 data class PortalResponse(
-    val portalUrl: String
+    val portalUrl: String,
 )

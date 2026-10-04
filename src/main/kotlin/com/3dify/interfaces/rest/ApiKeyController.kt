@@ -1,43 +1,40 @@
-package com.omni3d.interfaces.rest
+package com.`3dify`.interfaces.rest
 
-import com.omni3d.interfaces.rest.dto.ApiKeyCreatedResponse
-import com.omni3d.interfaces.rest.dto.ApiKeyResponse
-import com.omni3d.interfaces.rest.dto.CreateApiKeyRequest
-import com.omni3d.application.service.ApiKeyService
+import com.`3dify`.application.service.apikey.create.CreateApiKeyApplicationService
+import com.`3dify`.application.service.apikey.create.CreateApiKeyCommand
+import com.`3dify`.application.service.apikey.list.ListApiKeysApplicationService
+import com.`3dify`.application.service.apikey.list.ListApiKeysQuery
+import com.`3dify`.application.service.apikey.revoke.RevokeApiKeyApplicationService
+import com.`3dify`.application.service.apikey.revoke.RevokeApiKeyCommand
+import com.`3dify`.interfaces.rest.dto.CreateApiKeyRequest
+import com.`3dify`.interfaces.rest.dto.toResponse
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
-import org.springframework.web.bind.annotation.*
-import java.util.*
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
+import java.util.UUID
 
 @RestController
 @RequestMapping("/dashboard/api-keys")
 class ApiKeyController(
-    private val apiKeyService: ApiKeyService
+    private val createKey: CreateApiKeyApplicationService,
+    private val listKeys: ListApiKeysApplicationService,
+    private val revokeKey: RevokeApiKeyApplicationService,
 ) {
-
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun createKey(
-        authentication: Authentication,
-        @RequestBody request: CreateApiKeyRequest
-    ): ApiKeyCreatedResponse {
-        val userId = UUID.fromString(authentication.principal as String)
-        return apiKeyService.generateKey(userId, request.label, request.planName)
-    }
+    fun createKey(authentication: Authentication, @RequestBody request: CreateApiKeyRequest) = createKey.execute(CreateApiKeyCommand(UUID.fromString(authentication.principal as String), request.label, request.planName)).toResponse()
 
     @GetMapping
-    fun listKeys(authentication: Authentication): List<ApiKeyResponse> {
-        val userId = UUID.fromString(authentication.principal as String)
-        return apiKeyService.listKeys(userId)
-    }
+    fun listKeys(authentication: Authentication) = listKeys.execute(ListApiKeysQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
 
     @DeleteMapping("/{keyId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun revokeKey(
-        authentication: Authentication,
-        @PathVariable keyId: UUID
-    ) {
-        val userId = UUID.fromString(authentication.principal as String)
-        apiKeyService.revokeKey(userId, keyId)
-    }
+    fun revokeKey(authentication: Authentication, @PathVariable keyId: UUID) = revokeKey.execute(RevokeApiKeyCommand(UUID.fromString(authentication.principal as String), keyId))
 }

@@ -1,4 +1,4 @@
-package com.omni3d.infrastructure.config
+package com.`3dify`.infrastructure.config
 
 import org.flywaydb.core.Flyway
 import org.springframework.context.annotation.Bean
@@ -9,11 +9,9 @@ import javax.sql.DataSource
 class FlywayConfig {
 
     @Bean(initMethod = "migrate")
-    fun flyway(dataSource: DataSource): Flyway {
-        return Flyway.configure()
-            .dataSource(dataSource)
-            .locations("classpath:db/migration")
-            .baselineOnMigrate(true)
-            .load()
-    }
+    fun flyway(dataSource: DataSource): Flyway = Flyway.configure()
+        .dataSource(dataSource)
+        .locations("classpath:db/migration")
+        .baselineOnMigrate(true)
+        .load()
 }

@@ -1,8 +1,9 @@
-package com.omni3d.shared.metrics
+package com.`3dify`.shared.metrics
 
-import io.micrometer.core.instrument.*
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import org.springframework.stereotype.Component
-import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
@@ -78,8 +79,7 @@ class AppMetrics(private val registry: MeterRegistry) {
         .publishPercentileHistogram()
         .register(registry)
 
-    fun recordJobDuration(durationMs: Long) =
-        jobDurationTimer.record(durationMs, TimeUnit.MILLISECONDS)
+    fun recordJobDuration(durationMs: Long) = jobDurationTimer.record(durationMs, TimeUnit.MILLISECONDS)
 
     // ─── Outbox ───────────────────────────────────────────────────────────────
     val outboxPublished: Counter = Counter.builder("omni3d.outbox.published")

@@ -1,4 +1,4 @@
-package com.omni3d.infrastructure.config
+package com.`3dify`.infrastructure.config
 
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -16,7 +16,7 @@ import java.net.URI
 class S3Config(
     @Value("\${omni3d.r2.endpoint}") private val endpoint: String,
     @Value("\${omni3d.r2.access-key}") private val accessKey: String,
-    @Value("\${omni3d.r2.secret-key}") private val secretKey: String
+    @Value("\${omni3d.r2.secret-key}") private val secretKey: String,
 ) {
 
     @Bean
@@ -25,8 +25,8 @@ class S3Config(
         .endpointOverride(URI.create(endpoint))
         .credentialsProvider(
             StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(accessKey, secretKey)
-            )
+                AwsBasicCredentials.create(accessKey, secretKey),
+            ),
         )
         .region(Region.of("auto"))
         .forcePathStyle(true)

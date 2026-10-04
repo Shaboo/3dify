@@ -18,7 +18,7 @@ spring:
 logging:
   level:
     root: WARN
-    com.omni3d: INFO
+    com.3dify: INFO
     org.springframework.test: INFO
     org.springframework.security: INFO
     org.flywaydb: INFO

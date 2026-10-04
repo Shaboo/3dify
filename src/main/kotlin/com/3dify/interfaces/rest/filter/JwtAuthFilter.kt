@@ -1,9 +1,7 @@
-package com.omni3d.interfaces.rest.filter
+package com.`3dify`.interfaces.rest.filter
 
-import com.omni3d.infrastructure.security.JwtService
-
-
-import com.omni3d.infrastructure.persistence.UserRepository
+import com.`3dify`.application.service.identity.authenticate.AuthenticateJwtApplicationService
+import com.`3dify`.application.service.identity.authenticate.AuthenticateJwtQuery
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -12,39 +10,29 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
-import java.util.UUID
 
 @Component
-class JwtAuthFilter(
-    private val jwtService: JwtService,
-    private val userRepository: UserRepository
-) : OncePerRequestFilter() {
+class JwtAuthFilter(private val authenticate: AuthenticateJwtApplicationService) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
-        filterChain: FilterChain
+        filterChain: FilterChain,
     ) {
         val header = request.getHeader("Authorization")
 
         if (header != null && header.startsWith("Bearer ")) {
             val token = header.substring(7)
-            val claims = jwtService.validateToken(token)
+            val claims = authenticate.execute(AuthenticateJwtQuery(token))
 
             if (claims != null) {
-                val userId = UUID.fromString(claims.subject)
-
-                // Resolve admin status from DB
-                val userRecord = userRepository.findById(userId)
-                val isAdmin = userRecord?.isAdmin ?: false
-
                 val authorities = mutableListOf(SimpleGrantedAuthority("ROLE_USER"))
-                if (isAdmin) authorities.add(SimpleGrantedAuthority("ROLE_ADMIN"))
+                if (claims.isAdmin) authorities.add(SimpleGrantedAuthority("ROLE_ADMIN"))
 
                 val auth = UsernamePasswordAuthenticationToken(
                     claims.subject,
                     null,
-                    authorities
+                    authorities,
                 )
                 SecurityContextHolder.getContext().authentication = auth
             }

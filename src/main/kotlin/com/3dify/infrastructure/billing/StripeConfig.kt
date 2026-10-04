@@ -1,4 +1,4 @@
-package com.omni3d.infrastructure.billing
+package com.`3dify`.infrastructure.billing
 
 import com.stripe.Stripe
 import jakarta.annotation.PostConstruct
@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 class StripeConfig(
-    @Value("\${stripe.secret-key}") private val secretKey: String
+    @Value("\${stripe.secret-key}") private val secretKey: String,
 ) {
     @PostConstruct
     fun init() {

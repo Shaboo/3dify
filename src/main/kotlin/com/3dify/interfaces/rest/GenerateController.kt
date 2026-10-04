@@ -1,63 +1,50 @@
-package com.omni3d.interfaces.rest
+package com.`3dify`.interfaces.rest
 
-import com.omni3d.shared.exception.BadRequestException
-import com.omni3d.interfaces.rest.dto.GenerateResponse
-import com.omni3d.interfaces.rest.dto.JobHistoryEntry
-import com.omni3d.interfaces.rest.dto.JobResponse
-import com.omni3d.application.service.JobHistoryService
-import com.omni3d.application.service.JobService
-import com.omni3d.infrastructure.storage.StorageService
+import com.`3dify`.application.service.generation.submit.GenerateModelApplicationService
+import com.`3dify`.application.service.generation.submit.GenerateModelCommand
+import com.`3dify`.application.service.generation.submit.GenerationImage
+import com.`3dify`.application.service.job.getjob.GetJobApplicationService
+import com.`3dify`.application.service.job.getjob.GetJobQuery
+import com.`3dify`.application.service.job.history.GetJobHistoryApplicationService
+import com.`3dify`.application.service.job.history.GetJobHistoryQuery
+import com.`3dify`.application.service.job.listapikeyjobs.ListApiKeyJobsApplicationService
+import com.`3dify`.application.service.job.listapikeyjobs.ListApiKeyJobsQuery
+import com.`3dify`.interfaces.rest.dto.toResponse
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.Authentication
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestPart
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import java.util.*
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1")
 class GenerateController(
-    private val jobService: JobService,
-    private val storageService: StorageService,
-    private val jobHistoryService: JobHistoryService
+    private val generate: GenerateModelApplicationService,
+    private val listJobs: ListApiKeyJobsApplicationService,
+    private val getJob: GetJobApplicationService,
+    private val history: GetJobHistoryApplicationService,
 ) {
-
     @PostMapping("/generate")
     @ResponseStatus(HttpStatus.ACCEPTED)
     fun generate(
         authentication: Authentication,
         @RequestPart("image1") image1: MultipartFile,
-        @RequestPart("image2") image2: MultipartFile
-    ): GenerateResponse {
-        if (image1.isEmpty || image2.isEmpty) {
-            throw BadRequestException("Both image1 and image2 are required")
-        }
-
-        val apiKeyId = UUID.fromString(authentication.principal as String)
-
-        // Upload input images to R2
-        val key1 = "inputs/${UUID.randomUUID()}_${image1.originalFilename}"
-        val key2 = "inputs/${UUID.randomUUID()}_${image2.originalFilename}"
-
-        storageService.upload(key1, image1.bytes, image1.contentType ?: "image/png")
-        storageService.upload(key2, image2.bytes, image2.contentType ?: "image/png")
-
-        // Create job record + outbox event (transactional)
-        val jobId = jobService.createJob(apiKeyId, key1, key2)
-
-        return GenerateResponse(jobId = jobId, status = "PENDING")
-    }
+        @RequestPart("image2") image2: MultipartFile,
+    ) = generate.execute(GenerateModelCommand(UUID.fromString(authentication.principal as String), image1.toInput(), image2.toInput())).toResponse()
 
     @GetMapping("/jobs")
-    fun listJobs(authentication: Authentication): List<JobResponse> {
-        val apiKeyId = UUID.fromString(authentication.principal as String)
-        return jobService.listJobsByApiKey(apiKeyId)
-    }
+    fun listJobs(authentication: Authentication) = listJobs.execute(ListApiKeyJobsQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
 
     @GetMapping("/jobs/{jobId}")
-    fun getJob(@PathVariable jobId: UUID): JobResponse =
-        jobService.getJobById(jobId)
+    fun getJob(@PathVariable jobId: UUID) = getJob.execute(GetJobQuery(jobId)).toResponse()
 
     @GetMapping("/jobs/{jobId}/history")
-    fun getJobHistory(@PathVariable jobId: UUID): List<JobHistoryEntry> =
-        jobHistoryService.getHistory(jobId)
+    fun getJobHistory(@PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId)).map { it.toResponse() }
+    private fun MultipartFile.toInput() = GenerationImage(bytes, originalFilename, contentType ?: "image/png")
 }

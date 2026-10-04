@@ -1,13 +1,7 @@
-package com.omni3d.shared.exception
+package com.`3dify`.shared.exception
 
-import org.springframework.http.HttpStatus
-
-open class ApiException(
-    val status: HttpStatus,
-    override val message: String
-) : RuntimeException(message)
-
-class NotFoundException(message: String) : ApiException(HttpStatus.NOT_FOUND, message)
-class ConflictException(message: String) : ApiException(HttpStatus.CONFLICT, message)
-class BadRequestException(message: String) : ApiException(HttpStatus.BAD_REQUEST, message)
-class UnauthorizedException(message: String) : ApiException(HttpStatus.UNAUTHORIZED, message)
+open class ApiException(val statusCode: Int, override val message: String) : RuntimeException(message)
+class NotFoundException(message: String) : ApiException(404, message)
+class ConflictException(message: String) : ApiException(409, message)
+class BadRequestException(message: String) : ApiException(400, message)
+class UnauthorizedException(message: String) : ApiException(401, message)

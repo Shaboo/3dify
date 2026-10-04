@@ -1,6 +1,7 @@
-package com.omni3d.infrastructure.storage
+package com.`3dify`.infrastructure.storage
 
-import com.omni3d.shared.metrics.AppMetrics
+import com.`3dify`.domain.generation.ImageStorage
+import com.`3dify`.shared.metrics.AppMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -15,11 +16,11 @@ class StorageService(
     private val s3Client: S3Client,
     private val metrics: AppMetrics,
     @Value("\${omni3d.r2.bucket}") private val bucket: String,
-    @Value("\${omni3d.r2.endpoint}") private val endpoint: String
-) {
+    @Value("\${omni3d.r2.endpoint}") private val endpoint: String,
+) : ImageStorage {
     private val log = LoggerFactory.getLogger(StorageService::class.java)
 
-    fun upload(objectKey: String, data: ByteArray, contentType: String): String {
+    override fun upload(objectKey: String, data: ByteArray, contentType: String): String {
         log.debug("Uploading to R2 [key={}, bytes={}]", objectKey, data.size)
         return try {
             s3Client.putObject(
@@ -28,7 +29,7 @@ class StorageService(
                     .key(objectKey)
                     .contentType(contentType)
                     .build(),
-                RequestBody.fromBytes(data)
+                RequestBody.fromBytes(data),
             )
             val url = "$endpoint/$bucket/$objectKey"
             metrics.storageUploads.increment()
@@ -51,7 +52,7 @@ class StorageService(
                     .contentType(contentType)
                     .contentLength(contentLength)
                     .build(),
-                RequestBody.fromInputStream(inputStream, contentLength)
+                RequestBody.fromInputStream(inputStream, contentLength),
             )
             val url = "$endpoint/$bucket/$objectKey"
             metrics.storageUploads.increment()
@@ -70,7 +71,7 @@ class StorageService(
             GetObjectRequest.builder()
                 .bucket(bucket)
                 .key(objectKey)
-                .build()
+                .build(),
         )
     }
 }

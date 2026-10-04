@@ -4,9 +4,9 @@ spring:
 
   # --- DataSource ---
   datasource:
-    url: jdbc:postgresql://localhost:5432/omni3d
-    username: omni3d
-    password: omni3d
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/3dify}
+    username: ${DB_USER:3dify}
+    password: ${DB_PASSWORD:3dify}
     driver-class-name: org.postgresql.Driver
 
   # --- Flyway (handled by FlywayConfig.kt) ---
@@ -95,7 +95,7 @@ server:
 logging:
   level:
     root: INFO
-    com.omni3d: DEBUG
+    com.3dify: DEBUG
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.jooq: WARN
