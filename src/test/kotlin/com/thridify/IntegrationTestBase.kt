@@ -1,7 +1,9 @@
 package com.thridify
 
 import com.thridify.infrastructure.persistence.DirectWorkspaceLookup
+import com.thridify.support.IntegrationTestContainers
 import org.jooq.DSLContext
+import org.junit.jupiter.api.Tag
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
@@ -9,9 +11,9 @@ import org.springframework.context.annotation.Import
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
-import org.testcontainers.containers.PostgreSQLContainer
 import java.util.UUID
 
+@Tag("integration")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @Import(TestBeanConfig::class)
@@ -77,19 +79,10 @@ abstract class IntegrationTestBase {
     }
 
     companion object {
-        // Single JVM-level Postgres container shared across ALL test classes.
-        // Using a Kotlin object avoids the container being stopped when the first
-        // Spring context is torn down between test class runs.
-        private val postgres: PostgreSQLContainer<*> =
-            PostgreSQLContainer("postgres:16-alpine")
-                .withDatabaseName("omni3d_test")
-                .withUsername("omni3d")
-                .withPassword("omni3d")
-                .also { it.start() }
-
         @DynamicPropertySource
         @JvmStatic
         fun overrideProperties(registry: DynamicPropertyRegistry) {
+            val postgres = IntegrationTestContainers.postgres
             registry.add("spring.datasource.url", postgres::getJdbcUrl)
             registry.add("spring.datasource.username", postgres::getUsername)
             registry.add("spring.datasource.password", postgres::getPassword)

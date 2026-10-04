@@ -151,6 +151,9 @@ kotlin.sourceSets.named("main") {
 }
 
 tasks.withType<Test> {
+    // Integration classes share a database and truncate it between cases.
+    maxParallelForks = 1
+    systemProperty("junit.jupiter.execution.parallel.enabled", "false")
     useJUnitPlatform()
 }
 
@@ -160,4 +163,25 @@ tasks.named("compileKotlin") {
 }
 tasks.named("jooqCodegen") {
     mustRunAfter("flywayMigrate")
+}
+
+// Uses the same test sources and inherited tag as the full suite.
+tasks.register<Test>("integrationTest") {
+    description = "Run all integration tests against PostgreSQL Testcontainers (requires Docker)."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("integration") }
+    maxParallelForks = 1
+    systemProperty("junit.jupiter.execution.parallel.enabled", "false")
+    shouldRunAfter(tasks.named("test"))
+}
+
+// CI runs this alongside integrationTest in separate jobs; local test still runs everything.
+tasks.register<Test>("unitTest") {
+    description = "Run unit and architecture tests without starting integration containers."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { excludeTags("integration") }
 }

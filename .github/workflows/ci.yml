@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, lint and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 27
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '27'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Check formatting, build and run unit tests
+        run: ./gradlew --no-daemon spotlessCheck assemble unitTest
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-reports
+          path: |
+            build/reports/tests/unitTest/
+            build/test-results/unitTest/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Upload application JAR
+        uses: actions/upload-artifact@v7
+        with:
+          name: application
+          path: build/libs/*-SNAPSHOT.jar
+          retention-days: 7
+          if-no-files-found: error
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 27
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '27'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Verify Docker is available
+        run: docker info
+      - name: Run integration tests with Testcontainers
+        run: ./gradlew --no-daemon integrationTest
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-test-reports
+          path: |
+            build/reports/tests/integrationTest/
+            build/test-results/integrationTest/
+          retention-days: 14
+          if-no-files-found: ignore

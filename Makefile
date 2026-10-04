@@ -3,7 +3,7 @@
 GRADLE ?= ./gradlew
 COMPOSE ?= docker compose
 
-.PHONY: help format lint build test check clean run docker docker-up docker-down docker-logs docker-status migrate migrate-info jooq
+.PHONY: help format lint build test unit-test integration-test check clean run docker docker-up docker-down docker-logs docker-status migrate migrate-info jooq
 
 help: ## Show available commands
 	@awk 'BEGIN {FS = ":.*## "; printf "Commands:\n"} /^[a-zA-Z_-]+:.*## / {printf "  make %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -19,6 +19,12 @@ build: ## Build and run all checks and tests
 
 test: ## Run all tests, including architecture and integration tests
 	$(GRADLE) test
+
+unit-test: ## Run unit and architecture tests without integration containers
+	$(GRADLE) unitTest
+
+integration-test: ## Run integration tests with Testcontainers (requires Docker)
+	$(GRADLE) integrationTest
 
 check: ## Run formatting checks and tests
 	$(GRADLE) check

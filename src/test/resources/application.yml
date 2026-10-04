@@ -1,6 +1,7 @@
 # Test-specific Spring Boot config
 # Overrides application.yml for the test environment.
-# Datasource, RabbitMQ and Redis are overridden via Testcontainers @DynamicPropertySource.
+# PostgreSQL is supplied by Testcontainers through IntegrationTestBase.
+# RabbitMQ, S3 and RunPod adapters are mocked by TestBeanConfig.
 
 spring:
   # Disable auto-config for RabbitMQ in unit tests that don't start the full context

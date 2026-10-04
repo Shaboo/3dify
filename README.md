@@ -13,7 +13,7 @@ The code namespace is `com.thridify`. The backend follows DSA with one applicati
 
 The fresh V1 schema supports workspace ownership and independent store billing scopes. Existing direct-user/Stripe flows work through a default workspace; Shopify backend installation, billing synchronization, scoped model APIs and quota enforcement are implemented. The merchant frontend and product attachment belong in a separate Shopify app. Shopify is disabled by default pending real credentials and store validation.
 
-Build and run tests with `./gradlew build`. The build uses JDK 27 and targets JVM 26. Integration tests require Docker for PostgreSQL Testcontainers and mock external infrastructure.
+Build and run tests with `./gradlew build`. The build uses JDK 27 and targets JVM 26. All integration tests extend `IntegrationTestBase` and use a fresh PostgreSQL 16 Testcontainer with Flyway migrations. Docker must be running; no Compose services or local database are needed. The container lives for one test JVM and Testcontainers cleans it up afterward. Database tests run sequentially and reset application tables between cases. RabbitMQ, S3 and remote provider adapters are mocked. A test architecture check enforces the shared setup for Spring integration tests.
 
 Development commands are available through `make`:
 
@@ -24,6 +24,8 @@ Development commands are available through `make`:
 | `make lint` | Check formatting without changing files |
 | `make build` | Build, check formatting, and run tests |
 | `make test` | Run all tests |
+| `make unit-test` | Run unit and architecture tests |
+| `make integration-test` | Run only Testcontainers integration tests |
 | `make check` | Run formatting checks and tests |
 | `make docker` | Start PostgreSQL, RabbitMQ, and Redis; wait for readiness |
 | `make docker-down` | Stop the local services, preserving volumes |
@@ -42,3 +44,5 @@ Gradle migrations, jOOQ generation, and the application use the Compose database
 Spotless checks run as part of `check` and `build`. All ktlint rules, including package naming, are enforced.
 
 Local runtime settings are in `src/main/resources/application.yml`; infrastructure definitions are in `docker-compose.yml` and `rabbitmq/`. The RunPod adapter currently simulates generation callbacks.
+
+GitHub Actions CI runs on pushes to `main`, pull requests and manual dispatch. Two independent jobs run in parallel: one checks formatting with `spotlessCheck`, builds the application JAR and runs `unitTest` (including architecture checks); the other runs `integrationTest` using Docker/Testcontainers. The suites use complementary JUnit tags, so tests are not duplicated. Both jobs publish test reports, including on failure; the build job also publishes the application JAR. Local `make test` and `make build` continue to run the complete suite.
