@@ -1,6 +1,6 @@
-# 3dify system flows
+# thridify system flows
 
-The current backend follows [DSA](architecture.md). Protocol adapters call one application service per operation. Package namespace: `com.3dify` (escaped as the escaped numeric package component in Kotlin source).
+The current backend follows [DSA](architecture.md). Protocol adapters call one application service per operation. Package namespace: `com.thridify`.
 
 ## Endpoints and use cases
 
@@ -92,6 +92,6 @@ Signature verification and Stripe SDK model mapping belong to infrastructure. Th
 
 ## Persistence and follow-ups
 
-Flyway V1–V12 define nine application tables: users, plans, api_keys, jobs, webhooks, outbox_messages, job_history, subscriptions, and rate_limits. PostgreSQL adapters preserve existing SQL and map records to domain models; SQL records never cross the adapter boundary. The migration does not change database schemas, broker identities, API-key prefixes, configuration namespaces or metric names. Existing external identities still use `omni3d` where configured; the code namespace is `com.3dify`.
+Flyway V1–V12 define nine application tables: users, plans, api_keys, jobs, webhooks, outbox_messages, job_history, subscriptions, and rate_limits. PostgreSQL adapters preserve existing SQL and map records to domain models; SQL records never cross the adapter boundary. The migration does not change database schemas, broker identities, API-key prefixes, configuration namespaces or metric names. Existing external identities still use `omni3d` where configured; the code namespace is `com.thridify`.
 
 Duplicate handling, checkout compensation/transaction timing, atomic worker/callback writes, and job ownership checks are separate behavior changes in the [migration findings](docs/dsa-migration/PLAN.md). The [workspace/tenant ADR](docs/adr/0001-use-workspace-tenant-model-for-omnichannel.md) remains the direction for future Shopify/omnichannel ownership and billing.

@@ -1,8 +1,8 @@
-# 3dify
+# thridify
 
 Kotlin/Spring backend for image-to-3D generation, API-key access, dashboard authentication, Stripe subscriptions, and asynchronous GPU jobs.
 
-The code namespace is `com.3dify`. The backend follows DSA with one application service per use case, pure domain policies and ports, infrastructure adapters, and thin protocol entry points.
+The code namespace is `com.thridify`. The backend follows DSA with one application service per use case, pure domain policies and ports, infrastructure adapters, and thin protocol entry points.
 
 - [Architecture](architecture.md)
 - [System flows and endpoint map](system_flow.md)
@@ -35,6 +35,6 @@ For local database setup, run `make docker`, then `make jooq`. Generated sources
 
 Gradle migrations, jOOQ generation, and the application use the Compose database `3dify` with local user/password `3dify`. Override these with `DB_URL`, `DB_USER`, and `DB_PASSWORD`, for example `DB_URL=jdbc:postgresql://localhost:5433/3dify make jooq`.
 
-Spotless checks run as part of `check` and `build`. The package-name lint rule is disabled specifically to support the requested escaped `com.3dify` namespace; the remaining rules are enforced.
+Spotless checks run as part of `check` and `build`. All ktlint rules, including package naming, are enforced.
 
 Local runtime settings are in `src/main/resources/application.yml`; infrastructure definitions are in `docker-compose.yml` and `rabbitmq/`. The RunPod adapter currently simulates generation callbacks.

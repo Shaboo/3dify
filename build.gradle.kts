@@ -16,7 +16,7 @@ plugins {
     id("com.diffplug.spotless") version "8.10.3"
 }
 
-group = "com.3dify"
+group = "com.thridify"
 version = "0.0.1-SNAPSHOT"
 
 val localDatabaseUrl = providers.environmentVariable("DB_URL").getOrElse("jdbc:postgresql://localhost:5432/3dify")
@@ -29,7 +29,6 @@ spotless {
         targetExclude("**/generated/**")
         ktlint("1.8.0")
             .setEditorConfigPath("$projectDir/.editorconfig")
-            .editorConfigOverride(mapOf("ktlint_standard_package-name" to "disabled"))
     }
     kotlinGradle {
         target("*.gradle.kts")
@@ -140,7 +139,7 @@ jooq {
                 isKotlinNotNullRecordAttributes = true
             }
             target {
-                packageName = "com.3dify.infrastructure.persistence.generated"
+                packageName = "com.thridify.infrastructure.persistence.generated"
                 directory = "build/generated-src/jooq/main"
             }
         }

@@ -1,1 +1,1 @@
-rootProject.name = "3dify"
+rootProject.name = "thridify"

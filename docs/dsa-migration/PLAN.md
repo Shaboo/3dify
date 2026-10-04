@@ -87,7 +87,7 @@ Update this file after each slice with changed classes, validation results and r
 - A mechanical split that forwards into the old broad service is insufficient. Each service must own its complete orchestration and depend only on domain ports/policies and approved cross-cutting concerns.
 - Existing API DTOs must not be imported by application services. Domain objects and vendor SDK objects must not become endpoint response contracts.
 - No generic repository/state-machine framework is proposed yet: the current SQL and lifecycle behavior do not justify it without a concrete recurring need.
-- User authorized namespace correction on 2026-10-04: all packages, test directories, build group, generated-code target and logger namespaces become `com.3dify` (Kotlin escapes the numeric package component with backticks). External configuration/database/broker/metric identifiers remain frozen.
+- User authorized namespace correction on 2026-10-04: all packages, test directories, build group, generated-code target and logger namespaces become `com.thridify` (Kotlin escapes the numeric package component with backticks). External configuration/database/broker/metric identifiers remain frozen.
 
 ## Findings
 
@@ -106,7 +106,7 @@ Update this file after each slice with changed classes, validation results and r
 
 - Idempotency, transaction/compensation improvements and access-control fixes are behavior changes and remain separately scoped. The migration does not claim these existing operational gaps are solved.
 - The accepted workspace/tenant ADR defines future Shopify and omnichannel ownership/billing; that schema and authorization migration is not implemented here.
-- External config/database/broker/metric identifiers retain their existing identities. Package declarations, imports, test paths, Gradle group, codegen package and logger namespace are `com.3dify`.
+- External config/database/broker/metric identifiers retain their existing identities. Package declarations, imports, test paths, Gradle group, codegen package and logger namespace are `com.thridify`.
 
 ## Execution log
 
@@ -116,14 +116,16 @@ Update this file after each slice with changed classes, validation results and r
 - Plans: all admin use cases separated; AdminControllerTest and PublicPlanControllerTest passed (7 s).
 - Identity/access: register, login, key creation/list/revocation, token authentication and complete API authorization separated; password/token/rate-limiter ports; existing unit and endpoint tests passed (8 s).
 - Subscriptions: status, checkout, portal and webhook services, domain policy, typed billing events and Stripe adapter; existing unit and endpoint tests passed (6 s).
-- Namespace correction: user explicitly requested `com.3dify`; Kotlin package/import components escaped, test tree moved, build group/codegen/logging updated. Subscription/authentication checks passed after rename (9 s). External database/config/broker/metric identities preserved.
+- Namespace correction: user explicitly requested `com.thridify`; Kotlin package/import components escaped, test tree moved, build group/codegen/logging updated. Subscription/authentication checks passed after rename (9 s). External database/config/broker/metric identities preserved.
 - Generation: submission, dispatch, callback, relay and queries implemented; application services compose domain ports only; former broad JobService, JobHistoryService and OutboxService removed.
 - Webhooks: get/set/delete services implemented; former broad WebhookService removed.
 - Guardrails: ArchUnit 1.3 could not import JVM 26 bytecode. Upgraded to locally available 1.5.0 and added an explicit import sanity check. Temporary frozen artifacts from the incompatible import were discarded; final rules are strict and have no violation allowances.
 
 - Added regression coverage for job/history/outbox rollback, checked-exception transaction semantics, upload failures, subscription/rate-limit gate order, dispatch failure details, relay continuation, paid checkout and portal, signed Stripe event mapping, subscription event effects, generation message contracts, and callback notification failures.
 - Manually compared all eight persistence implementations against their original class bodies: SQL and record-mapping behavior are unchanged. Flyway migrations were not edited.
-- Bootstrap JAR verified: Start-Class and packaged application classes use `com.3dify`; no `com.omni3d` production classes are packaged.
+- Bootstrap JAR verified: Start-Class and packaged application classes use `com.thridify`; no `com.omni3d` production classes are packaged.
 - Documentation updated: README, architecture overview, system flows/endpoint map, migration findings and final inventory. The inventory generator was run from a temporary copy with backtick-aware package parsing; installed skills were not modified.
 
 - Final validation: `./gradlew build` passed; 93 tests across 20 suites, zero failures/errors/skips. Includes seven strict architecture tests and PostgreSQL integration tests.
+
+- Project renamed to `thridify` at user request; namespace is `com.thridify` with ordinary Kotlin identifiers. Package-name lint enforcement restored. Existing local database and broker identities are preserved.

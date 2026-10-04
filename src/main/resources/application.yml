@@ -95,7 +95,7 @@ server:
 logging:
   level:
     root: INFO
-    com.3dify: DEBUG
+    com.thridify: DEBUG
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.jooq: WARN

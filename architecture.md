@@ -1,6 +1,6 @@
-# 3dify architecture
+# thridify architecture
 
-The backend uses Domain Service Architecture (DSA) under the `com.3dify` namespace. Kotlin declarations and imports escape the numeric component as the escaped numeric package component. Sources and tests live under `com/3dify`.
+The backend uses Domain Service Architecture (DSA) under the `com.thridify` namespace. Sources and tests live under `com/thridify`.
 
 Each business use case has its own `*ApplicationService` with one public `execute` method. Entry points translate their protocol into commands or queries, invoke one application service, and map its result. Application services compose domain policies and I/O ports; they never invoke another application service.
 
