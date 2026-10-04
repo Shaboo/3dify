@@ -2,6 +2,7 @@ package com.thridify.interfaces.rest.exceptions
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.thridify.shared.exception.ApiException
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -32,7 +33,10 @@ class GlobalExceptionHandler(private val objectMapper: ObjectMapper) {
     }
 
     @ExceptionHandler(ApiException::class)
-    fun handleApiException(ex: ApiException, response: HttpServletResponse) = writeError(response, HttpStatus.valueOf(ex.statusCode), ex.message)
+    fun handleApiException(ex: ApiException, response: HttpServletResponse, request: HttpServletRequest) {
+        if (ex.statusCode == 401 && request.requestURI.startsWith("/shopify/api/")) response.setHeader("X-Shopify-Retry-Invalid-Session-Request", "1")
+        writeError(response, HttpStatus.valueOf(ex.statusCode), ex.message)
+    }
 
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception, response: HttpServletResponse) = writeError(response, HttpStatus.INTERNAL_SERVER_ERROR, ex.message ?: "Unexpected error")

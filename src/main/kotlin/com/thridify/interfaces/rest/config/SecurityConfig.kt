@@ -2,6 +2,7 @@ package com.thridify.interfaces.rest.config
 
 import com.thridify.interfaces.rest.filter.ApiKeyAuthFilter
 import com.thridify.interfaces.rest.filter.JwtAuthFilter
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.annotation.Order
@@ -22,6 +23,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 class SecurityConfig(
     private val jwtAuthFilter: JwtAuthFilter,
     private val apiKeyAuthFilter: ApiKeyAuthFilter,
+    @Value("\${shopify.frontend-origins:}") private val shopifyOrigins: String,
 ) {
 
     @Bean
@@ -36,6 +38,27 @@ class SecurityConfig(
         source.registerCorsConfiguration("/**", cfg)
         return source
     }
+
+    private fun shopifyCorsConfigurationSource(): CorsConfigurationSource {
+        val cfg = CorsConfiguration()
+        cfg.allowedOrigins = shopifyOrigins.split(",").map(String::trim).filter(String::isNotBlank)
+        cfg.allowedMethods = listOf("GET", "POST", "OPTIONS")
+        cfg.allowedHeaders = listOf("Authorization", "Content-Type", "Idempotency-Key")
+        cfg.exposedHeaders = listOf("X-Shopify-Retry-Invalid-Session-Request")
+        cfg.allowCredentials = false
+        return UrlBasedCorsConfigurationSource().apply { registerCorsConfiguration("/shopify/**", cfg) }
+    }
+
+    /** Shopify endpoints authenticate using verified ID tokens in their use cases. */
+    @Bean
+    @Order(0)
+    fun shopifySecurityFilterChain(http: HttpSecurity): SecurityFilterChain = http
+        .securityMatcher("/shopify/**")
+        .cors { it.configurationSource(shopifyCorsConfigurationSource()) }
+        .csrf { it.disable() }
+        .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+        .authorizeHttpRequests { it.anyRequest().permitAll() }
+        .build()
 
     /** Filter chain #1 — public API via X-API-KEY header */
     @Bean

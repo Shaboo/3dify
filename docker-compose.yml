@@ -7,7 +7,7 @@ services:
 #    ports:
 #      - "8080:8080"
 #    environment:
-#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/3dify
+#      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/thridify
 #      SPRING_DATASOURCE_USERNAME: 3dify
 #      SPRING_DATASOURCE_PASSWORD: 3dify
 #      SPRING_RABBITMQ_HOST: rabbitmq
@@ -30,7 +30,7 @@ services:
     image: postgres:16-alpine
     container_name: 3dify-postgres
     environment:
-      POSTGRES_DB: 3dify
+      POSTGRES_DB: thridify
       POSTGRES_USER: 3dify
       POSTGRES_PASSWORD: 3dify
     ports:

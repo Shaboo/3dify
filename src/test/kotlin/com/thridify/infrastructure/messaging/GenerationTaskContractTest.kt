@@ -3,7 +3,8 @@ package com.thridify.infrastructure.messaging
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.thridify.application.service.generation.dispatch.DispatchGenerationTaskApplicationService
 import com.thridify.application.service.generation.dispatch.DispatchGenerationTaskCommand
-import com.thridify.domain.outbox.OutboxRepository
+import com.thridify.infrastructure.outbox.OutboxGenerationTaskPublisher
+import com.thridify.infrastructure.outbox.OutboxRepository
 import com.thridify.interfaces.messaging.TaskWorker
 import io.mockk.Runs
 import io.mockk.every
@@ -24,7 +25,7 @@ class GenerationTaskContractTest {
         val outbox: OutboxRepository = mockk()
         val stored = slot<String>()
         every { outbox.insert("JOB", id, capture(stored)) } just Runs
-        OutboxGenerationTaskPublisher(outbox, mapper).enqueue(id, "image-1", "image-2")
+        OutboxGenerationTaskPublisher(outbox, mapper).publish(id, "image-1", "image-2")
 
         val rabbit: RabbitTemplate = mockk()
         val delivered = slot<String>()

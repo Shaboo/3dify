@@ -25,12 +25,13 @@ class GenerateControllerTest : IntegrationTestBase() {
     private fun createTestUserAndApiKey(planName: String = "free"): String {
         val userId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, email, password_hash) VALUES ('$userId', 'test@example.com', 'dummy_hash')")
+        createDirectWorkspace(userId)
 
         // Create subscription to the specified plan
         dsl.execute(
             """
-            INSERT INTO subscriptions (id, user_id, plan_id, status)
-            SELECT gen_random_uuid(), '$userId', id, 'active'
+            INSERT INTO subscriptions (id, billing_scope_id, provider, plan_id, status)
+            SELECT gen_random_uuid(), '${scopeId(userId)}', 'internal', id, 'active'
             FROM plans WHERE name = '$planName'
             """.trimIndent(),
         )
@@ -46,8 +47,8 @@ class GenerateControllerTest : IntegrationTestBase() {
 
         dsl.execute(
             """
-            INSERT INTO api_keys (id, user_id, plan_id, key_hash, key_prefix, label, is_active)
-            VALUES ('$apiKeyId', '$userId', $planIdQuery, '$hash', 'omni_pk_', 'Test Key', true)
+            INSERT INTO api_keys (id, workspace_id, billing_scope_id, created_by_user_id, plan_id, key_hash, key_prefix, label, is_active)
+            VALUES ('$apiKeyId', '${workspaceId(userId)}', '${scopeId(userId)}', '$userId', $planIdQuery, '$hash', 'omni_pk_', 'Test Key', true)
             """.trimIndent(),
         )
 

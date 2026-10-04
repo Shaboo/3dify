@@ -10,7 +10,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 @Repository("apiKeyRepository")
-class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
+class PostgresApiKeyRepository(private val dsl: DSLContext, private val workspaces: DirectWorkspaceLookup) : ApiKeyRepository {
 
     private companion object {
         val KEYS = DSL.table("api_keys")
@@ -18,7 +18,7 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
 
         // api_keys columns (qualified for JOINs)
         val AK_ID = DSL.field(DSL.name("api_keys", "id"), UUID::class.java)
-        val AK_USER_ID = DSL.field(DSL.name("api_keys", "user_id"), UUID::class.java)
+        val AK_USER_ID = DSL.field(DSL.name("api_keys", "created_by_user_id"), UUID::class.java)
         val AK_PLAN_ID = DSL.field(DSL.name("api_keys", "plan_id"), UUID::class.java)
         val AK_KEY_HASH = DSL.field(DSL.name("api_keys", "key_hash"), String::class.java)
         val AK_KEY_PREFIX = DSL.field(DSL.name("api_keys", "key_prefix"), String::class.java)
@@ -34,7 +34,7 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
 
         // Unqualified for INSERT / UPDATE SET
         private val COL_ID = DSL.field("id", UUID::class.java)
-        private val COL_USER_ID = DSL.field("user_id", UUID::class.java)
+        private val COL_USER_ID = DSL.field("created_by_user_id", UUID::class.java)
         private val COL_PLAN_ID = DSL.field("plan_id", UUID::class.java)
         private val COL_KEY_HASH = DSL.field("key_hash", String::class.java)
         private val COL_KEY_PREFIX = DSL.field("key_prefix", String::class.java)
@@ -48,6 +48,8 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
         dsl.insertInto(KEYS)
             .set(COL_ID, id)
             .set(COL_USER_ID, userId)
+            .set(DSL.field("workspace_id", UUID::class.java), workspaces.workspaceId(userId))
+            .set(DSL.field("billing_scope_id", UUID::class.java), workspaces.billingScopeId(userId))
             .set(COL_PLAN_ID, planId)
             .set(COL_KEY_HASH, keyHash)
             .set(COL_KEY_PREFIX, keyPrefix)
@@ -58,7 +60,7 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
     override fun findAllByUserId(userId: UUID): List<ApiKeyWithPlanEntity> = dsl.select(AK_ID, AK_KEY_PREFIX, AK_LABEL, P_NAME, AK_IS_ACTIVE, AK_CREATED_AT, AK_REVOKED_AT)
         .from(KEYS)
         .join(PLANS).on(AK_PLAN_ID.eq(P_ID))
-        .where(AK_USER_ID.eq(userId))
+        .where(DSL.field(DSL.name("api_keys", "billing_scope_id"), UUID::class.java).eq(workspaces.billingScopeId(userId)))
         .orderBy(AK_CREATED_AT.desc())
         .fetch()
         .map { r ->
@@ -77,7 +79,7 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
     override fun revoke(userId: UUID, keyId: UUID): Int = dsl.update(KEYS)
         .set(COL_IS_ACTIVE, false)
         .set(COL_REVOKED_AT, OffsetDateTime.now())
-        .where(AK_ID.eq(keyId).and(AK_USER_ID.eq(userId)))
+        .where(AK_ID.eq(keyId).and(DSL.field(DSL.name("api_keys", "billing_scope_id"), UUID::class.java).eq(workspaces.billingScopeId(userId))))
         .execute()
 
     override fun findByKeyHash(hash: String): ApiKeyAuthEntity? = dsl.select(AK_ID, AK_USER_ID, AK_IS_ACTIVE, P_RATE_LIMIT)
@@ -97,7 +99,7 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
     override fun updatePlanForUser(userId: UUID, planId: UUID) {
         dsl.update(KEYS)
             .set(COL_PLAN_ID_UQ, planId)
-            .where(AK_USER_ID.eq(userId))
+            .where(DSL.field(DSL.name("api_keys", "billing_scope_id"), UUID::class.java).eq(workspaces.billingScopeId(userId)))
             .and(AK_IS_ACTIVE.isTrue)
             .execute()
     }
@@ -105,6 +107,6 @@ class PostgresApiKeyRepository(private val dsl: DSLContext) : ApiKeyRepository {
     override fun setActiveByUserId(userId: UUID, active: Boolean) {
         val q = dsl.update(KEYS).set(COL_IS_ACTIVE, active)
         if (!active) q.set(COL_REVOKED_AT, OffsetDateTime.now())
-        q.where(AK_USER_ID.eq(userId)).execute()
+        q.where(DSL.field(DSL.name("api_keys", "billing_scope_id"), UUID::class.java).eq(workspaces.billingScopeId(userId))).execute()
     }
 }

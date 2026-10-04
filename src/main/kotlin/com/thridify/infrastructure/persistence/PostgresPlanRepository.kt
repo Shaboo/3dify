@@ -20,7 +20,7 @@ class PostgresPlanRepository(private val dsl: DSLContext) : PlanRepository {
         val MONTHLY_QUOTA = DSL.field("monthly_quota", Int::class.java)
         val PRICE_CENTS = DSL.field("price_cents", Int::class.java)
         val CURRENCY = DSL.field("currency", String::class.java)
-        val STRIPE_PRICE = DSL.field("stripe_price_id", String::class.java)
+        val STRIPE_PRICE = DSL.field("(SELECT external_offer_id FROM plan_offers WHERE plan_id = plans.id AND provider = 'stripe' AND billing_interval = 'monthly')", String::class.java).`as`("stripe_price_id")
         val IS_ACTIVE = DSL.field("is_active", Boolean::class.java)
         val SORT_ORDER = DSL.field("sort_order", Int::class.java)
 
@@ -50,18 +50,19 @@ class PostgresPlanRepository(private val dsl: DSLContext) : PlanRepository {
         sortOrder: Int,
     ): UUID {
         val id = UUID.randomUUID()
-        dsl.insertInto(TABLE)
-            .set(ID, id)
-            .set(NAME, name)
-            .set(DISPLAY_NAME, displayName)
-            .set(DESCRIPTION, description)
-            .set(RATE_LIMIT, rateLimitRpm)
-            .set(MONTHLY_QUOTA, monthlyQuota)
-            .set(PRICE_CENTS, priceCents)
-            .set(CURRENCY, currency)
-            .set(STRIPE_PRICE, stripePriceId)
-            .set(SORT_ORDER, sortOrder)
-            .execute()
+        dsl.execute(
+            """
+            WITH new_plan AS (
+                INSERT INTO plans (id, name, display_name, description, rate_limit_rpm, monthly_quota,
+                                   price_cents, currency, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+            )
+            INSERT INTO plan_offers (plan_id, provider, external_offer_id)
+            SELECT id, 'stripe', ?::varchar FROM new_plan WHERE ?::varchar IS NOT NULL
+            """.trimIndent(),
+            id, name, displayName, description, rateLimitRpm, monthlyQuota, priceCents, currency,
+            sortOrder, stripePriceId, stripePriceId,
+        )
         return id
     }
 
@@ -82,15 +83,28 @@ class PostgresPlanRepository(private val dsl: DSLContext) : PlanRepository {
             priceCents?.let { put(PRICE_CENTS as org.jooq.Field<Any?>, it) }
             rateLimitRpm?.let { put(RATE_LIMIT as org.jooq.Field<Any?>, it) }
             monthlyQuota?.let { put(MONTHLY_QUOTA as org.jooq.Field<Any?>, it) }
-            stripePriceId?.let { put(STRIPE_PRICE as org.jooq.Field<Any?>, it) }
             sortOrder?.let { put(SORT_ORDER as org.jooq.Field<Any?>, it) }
         }
+        stripePriceId?.let { saveStripeOffer(id, it) }
         if (updates.isEmpty()) return
         dsl.update(TABLE).set(updates).where(ID.eq(id)).execute()
     }
 
     override fun deactivate(id: UUID) {
         dsl.update(TABLE).set(IS_ACTIVE, false).where(ID.eq(id)).execute()
+    }
+
+    private fun saveStripeOffer(planId: UUID, priceId: String) {
+        dsl.execute(
+            """
+            INSERT INTO plan_offers (plan_id, provider, external_offer_id)
+            VALUES (?, 'stripe', ?)
+            ON CONFLICT (plan_id, provider, billing_interval)
+            DO UPDATE SET external_offer_id = EXCLUDED.external_offer_id
+            """.trimIndent(),
+            planId,
+            priceId,
+        )
     }
 
     private fun toEntity(r: org.jooq.Record) = PlanEntity(

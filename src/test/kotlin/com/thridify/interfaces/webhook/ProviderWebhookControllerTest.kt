@@ -48,10 +48,11 @@ class ProviderWebhookControllerTest : IntegrationTestBase() {
         // Setup: Create a user, plan, api key, and job
         val userId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, email, password_hash) VALUES ('$userId', 'test@test.com', 'hash')")
+        createDirectWorkspace(userId)
 
         val planId = dsl.fetchOne("SELECT id FROM plans WHERE name = 'pro'")?.get("id") as UUID
         val apiKeyId = UUID.randomUUID()
-        dsl.execute("INSERT INTO api_keys (id, user_id, plan_id, key_hash, key_prefix) VALUES ('$apiKeyId', '$userId', '$planId', 'hash', 'prefix')")
+        dsl.execute("INSERT INTO api_keys (id, workspace_id, billing_scope_id, created_by_user_id, plan_id, key_hash, key_prefix) VALUES ('$apiKeyId', '${workspaceId(userId)}', '${scopeId(userId)}', '$userId', '$planId', 'hash', 'prefix')")
 
         // Create the job and mark it processing
         val jobId = seedJob(apiKeyId)
@@ -89,9 +90,10 @@ class ProviderWebhookControllerTest : IntegrationTestBase() {
     fun `failed webhook updates job status to FAILED`() {
         val userId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, email, password_hash) VALUES ('$userId', 'test2@test.com', 'hash')")
+        createDirectWorkspace(userId)
         val planId = dsl.fetchOne("SELECT id FROM plans WHERE name = 'pro'")?.get("id") as UUID
         val apiKeyId = UUID.randomUUID()
-        dsl.execute("INSERT INTO api_keys (id, user_id, plan_id, key_hash, key_prefix) VALUES ('$apiKeyId', '$userId', '$planId', 'hash', 'prefix')")
+        dsl.execute("INSERT INTO api_keys (id, workspace_id, billing_scope_id, created_by_user_id, plan_id, key_hash, key_prefix) VALUES ('$apiKeyId', '${workspaceId(userId)}', '${scopeId(userId)}', '$userId', '$planId', 'hash', 'prefix')")
 
         val jobId = seedJob(apiKeyId)
         jobRepository.updateStatus(jobId, "PROCESSING")
@@ -119,9 +121,10 @@ class ProviderWebhookControllerTest : IntegrationTestBase() {
     fun `webhook with mismatched external task ID is rejected as BAD REQUEST`() {
         val userId = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id, email, password_hash) VALUES ('$userId', 'test3@test.com', 'hash')")
+        createDirectWorkspace(userId)
         val planId = dsl.fetchOne("SELECT id FROM plans WHERE name = 'pro'")?.get("id") as UUID
         val apiKeyId = UUID.randomUUID()
-        dsl.execute("INSERT INTO api_keys (id, user_id, plan_id, key_hash, key_prefix) VALUES ('$apiKeyId', '$userId', '$planId', 'hash', 'prefix')")
+        dsl.execute("INSERT INTO api_keys (id, workspace_id, billing_scope_id, created_by_user_id, plan_id, key_hash, key_prefix) VALUES ('$apiKeyId', '${workspaceId(userId)}', '${scopeId(userId)}', '$userId', '$planId', 'hash', 'prefix')")
 
         val jobId = seedJob(apiKeyId)
         jobRepository.updateStatus(jobId, "PROCESSING")

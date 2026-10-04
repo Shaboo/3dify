@@ -45,7 +45,8 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         val user = UUID.randomUUID()
         val key = UUID.randomUUID()
         dsl.execute("INSERT INTO users (id,email,password_hash) VALUES (?, 'rollback@example.com', 'hash')", user)
-        dsl.execute("INSERT INTO api_keys (id,user_id,plan_id,key_hash,key_prefix) SELECT ?,?,id,'hash','prefix' FROM plans WHERE name='free'", key, user)
+        createDirectWorkspace(user)
+        dsl.execute("INSERT INTO api_keys (id,workspace_id,billing_scope_id,created_by_user_id,plan_id,key_hash,key_prefix) SELECT ?,?,?,?,id,'hash','prefix' FROM plans WHERE name='free'", key, workspaceId(user), scopeId(user), user)
         return key
     }
 
@@ -60,8 +61,8 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
     @Test
     fun `outbox failure rolls back the job history and outbox after uploads`() {
         val failingPublisher = object : GenerationTaskPublisher {
-            override fun enqueue(jobId: UUID, imageKey1: String, imageKey2: String) {
-                publisher.enqueue(jobId, imageKey1, imageKey2)
+            override fun publish(jobId: UUID, imageKey1: String, imageKey2: String) {
+                publisher.publish(jobId, imageKey1, imageKey2)
                 throw IllegalStateException("outbox failure")
             }
         }

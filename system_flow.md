@@ -35,6 +35,8 @@ All names in the table have the `ApplicationService` suffix. Creation returns th
 
 ## Authentication
 
+Direct registration atomically provisions the user, workspace, owner membership and direct billing scope. Current dashboard endpoints resolve that user’s default workspace; explicit workspace selection and Shopify staff authentication are not implemented yet.
+
 JWT authentication verifies the token via the token port and looks up administrator status through the user repository. The filter maps the application result into Spring authorities. Administrator status is read from PostgreSQL, rather than trusted from a token role claim.
 
 API authentication reads `X-API-KEY`, checks its prefix/hash and active flag, loads the subscription, checks eligibility, then consumes a PostgreSQL-backed Bucket4j token. Invalid keys produce 401, absent/ineligible subscriptions 403, and exhausted rate limits 429. Subscription rejection does not consume rate-limit capacity. The API principal remains the API-key ID; the dashboard principal remains the user ID.
@@ -47,16 +49,19 @@ sequenceDiagram
     participant A as Application services
     participant S as Image storage
     participant D as PostgreSQL
+    participant O as Infrastructure outbox
     participant R as RabbitMQ
     participant G as GPU provider
     participant W as Customer webhook
     C->>A: GenerateModelCommand with two images
     A->>S: Upload both images
-    A->>D: Transaction: pending job, history, task outbox
+    A->>D: Transaction: pending job and history
+    A->>O: Publish generation task through domain port
+    O->>D: Store task in the same transaction
     A-->>C: 202 with jobId and PENDING
-    A->>D: Poll up to 50 pending outbox messages every 500 ms
-    A->>R: Deliver stored generation task
-    A->>D: Mark successful publication
+    O->>D: Poll up to 50 pending outbox messages every 500 ms
+    O->>R: Deliver stored generation task
+    O->>D: Mark successful publication
     R->>A: DispatchGenerationTaskCommand
     A->>D: Record processing and history
     A->>G: Start generation
@@ -78,13 +83,13 @@ The development RunPod adapter generates a mock task ID and simulates a completi
 
 ## Billing
 
-Free checkout upserts an active subscription, changes the plan for the user's active API keys, records activation, and returns the requested success URL. Paid checkout requires a linked Stripe price and creates a subscription-mode session. It retains the success-URL suffix `?session_id={CHECKOUT_SESSION_ID}` and `userId`/`planId` metadata. Billing portal creation requires a subscription with a linked Stripe customer.
+Free checkout upserts an active subscription, changes the plan for the direct scope's active API keys, records activation, and returns the requested success URL. Free subscriptions use provider `internal`; paid subscriptions store provider `stripe` and generic external references. Paid checkout requires a monthly Stripe plan offer and creates a subscription-mode session. It retains the success-URL suffix `?session_id={CHECKOUT_SESSION_ID}` and `userId`/`planId` metadata. Billing portal creation requires a subscription with a linked Stripe customer.
 
 | Stripe event | Effect |
 |---|---|
 | `checkout.session.completed` | Retrieve subscription state, upsert it, update active API-key plans, measure activation |
 | `customer.subscription.updated` | Update status/period end; reactivate API keys only for `active` |
-| `customer.subscription.deleted` | Mark canceled; deactivate the associated user's keys |
+| `customer.subscription.deleted` | Mark canceled; deactivate the direct scope's keys |
 | `invoice.payment_failed` | Mark the customer's subscriptions past due; preserve current key activation flags |
 | Other event | Acknowledge without state changes |
 
@@ -92,6 +97,8 @@ Signature verification and Stripe SDK model mapping belong to infrastructure. Th
 
 ## Persistence and follow-ups
 
-Flyway V1–V12 define nine application tables: users, plans, api_keys, jobs, webhooks, outbox_messages, job_history, subscriptions, and rate_limits. PostgreSQL adapters preserve existing SQL and map records to domain models; SQL records never cross the adapter boundary. The migration does not change database schemas, broker identities, API-key prefixes, configuration namespaces or metric names. Existing external identities still use `omni3d` where configured; the code namespace is `com.thridify`.
+The single `V1__initial_schema.sql` migration creates 15 tables, including workspaces, memberships, platform connections, billing scopes, plans/offers, provider-neutral subscriptions and scope-based usage periods. Resource ownership is persisted on workspaces; subscriptions and allowances belong to billing scopes. API-key creator identity is attribution, not resource ownership. See the [database guide](docs/database.md) for constraints and fresh-database setup.
 
-Duplicate handling, checkout compensation/transaction timing, atomic worker/callback writes, and job ownership checks are separate behavior changes in the [migration findings](docs/dsa-migration/PLAN.md). The [workspace/tenant ADR](docs/adr/0001-use-workspace-tenant-model-for-omnichannel.md) remains the direction for future Shopify/omnichannel ownership and billing.
+Current direct APIs still expose user-oriented commands and some Stripe-oriented DTOs. PostgreSQL adapters resolve the default workspace and direct scope to keep those flows operational. This is a transition boundary, not completed multi-workspace authorization. Shopify installation, hosted pricing, verified subscription synchronization, staff access and usage enforcement remain upcoming work under [ADR 0001](docs/adr/0001-workspaces-and-store-scoped-billing.md). Shopify installation resolves a store connection; each store gets an independent billing scope rather than sharing a workspace subscription implicitly.
+
+Duplicate handling, checkout compensation/transaction timing, atomic worker/callback writes, and job ownership checks remain recorded in the [migration findings](docs/dsa-migration/PLAN.md). Broker identities, API-key prefixes, configuration namespaces and metric names retain their existing values.

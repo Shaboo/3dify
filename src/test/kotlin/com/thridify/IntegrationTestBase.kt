@@ -1,5 +1,6 @@
 package com.thridify
 
+import com.thridify.infrastructure.persistence.DirectWorkspaceLookup
 import org.jooq.DSLContext
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -9,6 +10,7 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.web.servlet.MockMvc
 import org.testcontainers.containers.PostgreSQLContainer
+import java.util.UUID
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -26,7 +28,15 @@ abstract class IntegrationTestBase {
         dsl.execute(
             """
             TRUNCATE TABLE
+                shopify_webhook_receipts,
+                usage_periods,
                 subscriptions,
+                plan_offers,
+                platform_connections,
+                billing_scopes,
+                workspace_memberships,
+                workspaces,
+                rate_limits,
                 api_keys,
                 job_history,
                 jobs,
@@ -53,6 +63,17 @@ abstract class IntegrationTestBase {
             ON CONFLICT DO NOTHING
             """.trimIndent(),
         )
+    }
+
+    protected fun workspaceId(userId: UUID): UUID = DirectWorkspaceLookup(dsl).workspaceId(userId)
+
+    protected fun scopeId(userId: UUID): UUID = DirectWorkspaceLookup(dsl).billingScopeId(userId)
+
+    protected fun createDirectWorkspace(userId: UUID) {
+        val workspace = UUID.randomUUID()
+        dsl.execute("INSERT INTO workspaces (id, name) VALUES (?, 'Test workspace')", workspace)
+        dsl.execute("INSERT INTO workspace_memberships (workspace_id, user_id, role, is_default) VALUES (?, ?, 'owner', true)", workspace, userId)
+        dsl.execute("INSERT INTO billing_scopes (workspace_id) VALUES (?)", workspace)
     }
 
     companion object {

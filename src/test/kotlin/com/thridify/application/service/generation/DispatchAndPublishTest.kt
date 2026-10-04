@@ -2,13 +2,9 @@ package com.thridify.application.service.generation
 
 import com.thridify.application.service.generation.dispatch.DispatchGenerationTaskApplicationService
 import com.thridify.application.service.generation.dispatch.DispatchGenerationTaskCommand
-import com.thridify.application.service.generation.publish.PublishPendingGenerationTasksApplicationService
 import com.thridify.domain.generation.GenerationProviderClient
-import com.thridify.domain.generation.GenerationTaskDelivery
 import com.thridify.domain.job.JobHistoryRepository
 import com.thridify.domain.job.JobRepository
-import com.thridify.domain.outbox.OutboxMessageEntity
-import com.thridify.domain.outbox.OutboxRepository
 import com.thridify.shared.metrics.AppMetrics
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
@@ -16,7 +12,6 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.mockk.verifyOrder
 import org.junit.jupiter.api.Test
-import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.test.assertEquals
 
@@ -53,21 +48,5 @@ class DispatchAndPublishTest {
         verify { history.insert(id, "FAILED", "GPU Provider Error: \${ex.message}") }
         verify(exactly = 0) { jobs.updateExternalTaskId(any(), any()) }
         assertEquals(1.0, metrics.jobsFailed.count())
-    }
-
-    @Test
-    fun `relay leaves failed delivery pending and continues to subsequent messages`() {
-        val outbox: OutboxRepository = mockk(relaxed = true)
-        val delivery: GenerationTaskDelivery = mockk()
-        val first = OutboxMessageEntity(UUID.randomUUID(), "JOB", UUID.randomUUID(), "bad payload", OffsetDateTime.now(), null)
-        val second = first.copy(id = UUID.randomUUID(), aggregateId = UUID.randomUUID(), payload = "good payload")
-        every { outbox.findUnpublished(50) } returns listOf(first, second)
-        every { delivery.deliver(first) } throws IllegalArgumentException("invalid payload")
-        every { delivery.deliver(second) } returns second.aggregateId
-        PublishPendingGenerationTasksApplicationService(outbox, delivery, metrics).execute()
-        verify(exactly = 0) { outbox.markPublished(first.id) }
-        verify(exactly = 1) { outbox.markPublished(second.id) }
-        assertEquals(1.0, metrics.outboxFailed.count())
-        assertEquals(1.0, metrics.outboxPublished.count())
     }
 }

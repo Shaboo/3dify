@@ -6,10 +6,12 @@
 - Scope: the complete Kotlin/Spring backend, including authentication filters, REST endpoints, Stripe and RunPod callbacks, Rabbit consumer, and outbox scheduler.
 - Source architecture: classic Spring services moved into DSA-named packages without dependency inversion or use-case separation.
 - Target: layer-first DSA, one application-service class per business use case, one public execution method per class.
-- Status: structural migration complete and verified. Behavior-changing follow-ups are explicitly outside this refactor.
+- Status: structural DSA migration complete. Subsequent user-authorized changes: namespace rename, infrastructure-only outbox, and fresh workspace/store-billing schema. Shopify runtime and explicit workspace authorization remain pending.
 - Working tree was clean at discovery start. Changes remain local and reviewable; no commits or deployment performed.
 
-## Contract freeze
+## Original DSA contract freeze (historical)
+
+The following applied to the original architecture-only refactor. The user subsequently authorized replacement of the database baseline and ADR; the schema/Flyway freeze is superseded for that change.
 
 Preserve HTTP routes, verbs, status codes, JSON fields and nullability, error text, authentication and authorization behavior, JWT claims, API key prefix/hash, database schema and Flyway history, Rabbit queue/exchange/routing keys and task JSON, Stripe metadata and event handling, RunPod request/callback fields, configuration keys, metrics, and the 500 ms outbox poll with batch size 50. Preserve referenced Spring bean identities when introducing adapters.
 
@@ -17,11 +19,11 @@ Preserve existing side-effect order, exception handling, transaction boundaries 
 
 ## Inventory summary and project context
 
-Initial inventory: 47 production files, including nine broad application files. Final inventory: 152 production files, including 27 single-use-case application services. Domain models/ports and application commands/queries/results now have separate files grouped by concept. The inventory is heuristic; its multi-service-controller flags are resolved by the architecture rule that checks each handler invokes exactly one service.
+Initial inventory: 47 production files, including nine broad application files. Current inventory: 153 production files, including 26 single-use-case application services. Domain models/ports and application commands/queries/results now have separate files grouped by concept. The inventory is heuristic; its multi-service-controller flags are resolved by the architecture rule that checks each handler invokes exactly one service.
 
 The product provides image-to-3D generation through API keys, with a user dashboard, subscription billing, admin-managed pricing, asynchronous GPU generation, downloadable outputs, and optional completion webhooks.
 
-- Registration/login persist users and issue JWTs. JWT authentication additionally reads administrator status from PostgreSQL.
+- Registration atomically provisions a user/workspace/owner/direct billing scope; login issues JWTs. JWT authentication additionally reads administrator status from PostgreSQL.
 - API key access loads the key and subscription, enforces subscription eligibility, then consumes a PostgreSQL-backed rate-limit token.
 - Generation uploads two images to storage, writes a pending job/history/outbox in a database transaction, and returns the job ID.
 - The outbox relay publishes task JSON to Rabbit. The worker marks processing, submits RunPod generation, and stores its external task ID; dispatch failures record a failed job.
@@ -30,7 +32,7 @@ The product provides image-to-3D generation through API keys, with a user dashbo
 - Checkout either activates a free subscription and updates API-key plans, or creates a Stripe subscription checkout. Billing portal requires a linked Stripe customer.
 - Stripe callbacks activate subscriptions, update their status, deactivate/reactivate API keys, or mark payment overdue.
 
-Domain groups: identity, API access, plans, subscriptions, generation jobs, customer webhook configuration, and delivery/outbox. These are packages inside the current service, not proposed new services or databases. Cross-group orchestration stays in the owning use case.
+Domain groups: identity, API access, plans, subscriptions, generation jobs, customer webhook configuration, with delivery/outbox entirely in infrastructure. These are packages inside the current service, not proposed new services or databases. Cross-group orchestration stays in the owning use case.
 
 ## Class map
 
@@ -51,7 +53,7 @@ Target application directory: `application/service/<group>/<usecase>/`. Every li
 | ProviderWebhookController + JobService result helpers | HandleGenerationCallback: verify association, apply result, persist history, measure, attempt customer notification; controller maps result and preserves 400/500 behavior |
 | WebhookService | GetWebhook, SetWebhook, DeleteWebhook; resolve URL becomes a repository operation used by callback orchestration |
 | OutboxService | Infrastructure outbox-backed GenerationTaskPublisher implementing a domain port; JSON serialization stays in infrastructure |
-| OutboxPublisher | PublishPendingGenerationTasks plus a thin interfaces/scheduled trigger; Rabbit publication and serialization stay in adapters |
+| OutboxPublisher | Infrastructure OutboxPublisher scheduler and OutboxRelay; storage, delivery and serialization stay in infrastructure |
 | JobHistoryService.recordChange | JobHistoryRepository domain port used within the owning use cases |
 | Eight infrastructure repositories | Domain repository interfaces with current intent/signatures; existing SQL implementations become Postgres*Repository adapters |
 | StorageService, RunPodClient, Stripe SDK calls | ImageStorage, GenerationProviderClient, BillingClient domain ports and infrastructure implementations |
@@ -87,14 +89,14 @@ Update this file after each slice with changed classes, validation results and r
 - A mechanical split that forwards into the old broad service is insufficient. Each service must own its complete orchestration and depend only on domain ports/policies and approved cross-cutting concerns.
 - Existing API DTOs must not be imported by application services. Domain objects and vendor SDK objects must not become endpoint response contracts.
 - No generic repository/state-machine framework is proposed yet: the current SQL and lifecycle behavior do not justify it without a concrete recurring need.
-- User authorized namespace correction on 2026-10-04: all packages, test directories, build group, generated-code target and logger namespaces become `com.thridify` (Kotlin escapes the numeric package component with backticks). External configuration/database/broker/metric identifiers remain frozen.
+- User authorized namespace correction on 2026-10-04: all packages, test directories, build group, generated-code target and logger namespaces become `com.thridify` (ordinary Kotlin identifiers; the earlier numeric namespace was superseded). External configuration/database/broker/metric identifiers remain frozen.
 
 ## Findings
 
 1. Resolved: initial baseline was red: `./gradlew build` fails at compileKotlin because `3difyApplication.kt:12` calls `runApplication<Omni3dApplication>` while the declared class is backtick-escaped `3difyApplication`. Tests did not run. Observed Gradle reported build duration: 1 s.
-2. Resolved: seven strict ArchUnit checks now enforce layers, technology restrictions, use-case ownership, entry-point composition, domain policies, namespace, shared dependencies and persistence placement. No frozen store, ignores, or violation budget remains.
+2. Resolved: eight strict ArchUnit checks now enforce layers, technology restrictions, use-case ownership, entry-point composition, domain policies, namespace, shared dependencies and persistence placement. No frozen store, ignores, or violation budget remains.
 3. Resolved: application services now depend on domain ports/policies and cross-cutting metrics/logging only. Broad services and application-service chaining were removed.
-4. Resolved: REST endpoints, authentication filters, callbacks, listener and scheduler each invoke one application service. Infrastructure implements all SQL/vendor/storage/crypto/rate-limit/notification ports.
+4. Resolved: REST endpoints, authentication filters, callbacks and listener each invoke one application service; the technical outbox scheduler stays in infrastructure. Infrastructure implements all SQL/vendor/storage/crypto/rate-limit/notification ports.
 5. Stripe checkout mutates an external service while its DB transaction is open. Changing timing/compensation is a separate behavior change.
 6. Worker and provider callbacks perform multiple independent database writes without a single transaction. Adding atomicity would change existing partial-failure behavior.
 7. Command and callback deduplication is absent. Outbox/Rabbit redelivery and repeated Stripe/RunPod callbacks can repeat side effects. Introducing idempotency needs a separate decision and possibly persistent schema support.
@@ -105,8 +107,8 @@ Update this file after each slice with changed classes, validation results and r
 ## Follow-ups
 
 - Idempotency, transaction/compensation improvements and access-control fixes are behavior changes and remain separately scoped. The migration does not claim these existing operational gaps are solved.
-- The accepted workspace/tenant ADR defines future Shopify and omnichannel ownership/billing; that schema and authorization migration is not implemented here.
-- External config/database/broker/metric identifiers retain their existing identities. Package declarations, imports, test paths, Gradle group, codegen package and logger namespace are `com.thridify`.
+- The replacement [workspace/billing ADR](../adr/0001-workspaces-and-store-scoped-billing.md) governs the fresh V1 schema. Persistence support for default direct workspaces is implemented; explicit workspace authorization and Shopify/WooCommerce runtime integrations are not.
+- Development database now defaults to `thridify`; legacy broker/config/metric identifiers retain their existing identities. Package declarations, imports, test paths, Gradle group, codegen package and logger namespace are `com.thridify`.
 
 ## Execution log
 
@@ -116,7 +118,7 @@ Update this file after each slice with changed classes, validation results and r
 - Plans: all admin use cases separated; AdminControllerTest and PublicPlanControllerTest passed (7 s).
 - Identity/access: register, login, key creation/list/revocation, token authentication and complete API authorization separated; password/token/rate-limiter ports; existing unit and endpoint tests passed (8 s).
 - Subscriptions: status, checkout, portal and webhook services, domain policy, typed billing events and Stripe adapter; existing unit and endpoint tests passed (6 s).
-- Namespace correction: user explicitly requested `com.thridify`; Kotlin package/import components escaped, test tree moved, build group/codegen/logging updated. Subscription/authentication checks passed after rename (9 s). External database/config/broker/metric identities preserved.
+- Namespace correction: user explicitly requested `com.thridify`; source/test trees moved to ordinary `com.thridify` packages, build group/codegen/logging updated. Subscription/authentication checks passed after rename (9 s). External database/config/broker/metric identities preserved.
 - Generation: submission, dispatch, callback, relay and queries implemented; application services compose domain ports only; former broad JobService, JobHistoryService and OutboxService removed.
 - Webhooks: get/set/delete services implemented; former broad WebhookService removed.
 - Guardrails: ArchUnit 1.3 could not import JVM 26 bytecode. Upgraded to locally available 1.5.0 and added an explicit import sanity check. Temporary frozen artifacts from the incompatible import were discarded; final rules are strict and have no violation allowances.
@@ -126,6 +128,19 @@ Update this file after each slice with changed classes, validation results and r
 - Bootstrap JAR verified: Start-Class and packaged application classes use `com.thridify`; no `com.omni3d` production classes are packaged.
 - Documentation updated: README, architecture overview, system flows/endpoint map, migration findings and final inventory. The inventory generator was run from a temporary copy with backtick-aware package parsing; installed skills were not modified.
 
-- Final validation: `./gradlew build` passed; 93 tests across 20 suites, zero failures/errors/skips. Includes seven strict architecture tests and PostgreSQL integration tests.
+- Original DSA validation: `./gradlew build` passed; 93 tests across 20 suites, zero failures/errors/skips. Includes seven strict architecture tests and PostgreSQL integration tests.
 
 - Project renamed to `thridify` at user request; namespace is `com.thridify` with ordinary Kotlin identifiers. Package-name lint enforcement restored. Existing local database and broker identities are preserved.
+
+- Outbox encapsulation: moved outbox models, repository, delivery contract/adapters, relay and scheduler into `infrastructure/outbox`. Application submission only calls `GenerationTaskPublisher.publish`; relay is a technical process, not an application use case. Kept the 500 ms delay, batch size 50, transactional insertion, failed-message continuation and metrics. Added a strict architecture guard for outbox isolation; full build passed with 94 tests.
+
+## Fresh workspace/store-billing baseline (2026-10-04)
+
+- User authorized replacing the previous ADR and all migration scripts because no deployment exists. Retired V1–V12; added a fresh V1 with 15 tables and workspace/scope integrity constraints. Historical claims above about preserved SQL/migrations describe the initial DSA phase, not this subsequent schema change.
+- Replaced ADR 0001 with workspace ownership, per-store subscriptions/allowances, provider-neutral billing references and separated plan offers. Shared quota is deferred.
+- Direct signup provisions user/workspace/membership/scope in one SQL statement. Persistence adapters map existing direct-user APIs through default workspace/direct scope, move provider prices to offers, and derive job tenant/scope from API keys. Some domain methods/DTOs still use userId/Stripe vocabulary; explicit context and generic billing use cases remain future work.
+- Integration fixtures now target the new schema. Added database regression tests for independent store billing/allowance, cross-workspace and cross-store references, current-subscription uniqueness/history, provider namespaces, quota bounds and atomic signup provisioning.
+- Created a fresh local `thridify` database; the older `3dify` database was preserved. Updated Compose, application and Gradle defaults, and regenerated jOOQ from the fresh baseline.
+- Updated README, architecture overview, system flows, schema/setup guide and inventory.
+
+- Fresh-baseline validation: Flyway migration and jOOQ generation succeeded against local `thridify`; full build passed with 102 tests, including eight architecture checks and PostgreSQL schema-isolation regressions.

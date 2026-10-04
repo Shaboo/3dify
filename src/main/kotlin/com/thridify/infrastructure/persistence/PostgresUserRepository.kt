@@ -23,17 +23,31 @@ class PostgresUserRepository(private val dsl: DSLContext) : UserRepository {
     override fun existsByEmail(email: String): Boolean = dsl.fetchExists(dsl.selectOne().from(TABLE).where(EMAIL.eq(email)))
 
     override fun insert(id: UUID, email: String, passwordHash: String, name: String?) {
-        dsl.insertInto(TABLE)
-            .set(ID, id)
-            .set(EMAIL, email)
-            .set(HASH, passwordHash)
-            .set(NAME, name)
-            .execute()
+        val workspaceId = UUID.randomUUID()
+        dsl.execute(
+            """
+            WITH new_user AS (
+                INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?) RETURNING id
+            ), new_workspace AS (
+                INSERT INTO workspaces (id, name) SELECT ?, ? FROM new_user RETURNING id
+            ), new_membership AS (
+                INSERT INTO workspace_memberships (workspace_id, user_id, role, is_default)
+                SELECT new_workspace.id, new_user.id, 'owner', true FROM new_workspace CROSS JOIN new_user
+            )
+            INSERT INTO billing_scopes (workspace_id) SELECT id FROM new_workspace
+            """.trimIndent(),
+            id,
+            email,
+            passwordHash,
+            name,
+            workspaceId,
+            name ?: email,
+        )
     }
 
     override fun findByEmail(email: String): UserEntity? = dsl.select(ID, EMAIL, HASH, IS_ADMIN)
         .from(TABLE)
-        .where(EMAIL.eq(email))
+        .where(EMAIL.eq(email).and(HASH.isNotNull))
         .fetchOne()
         ?.let { r ->
             UserEntity(

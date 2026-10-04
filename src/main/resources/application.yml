@@ -4,7 +4,7 @@ spring:
 
   # --- DataSource ---
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/3dify}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/thridify}
     username: ${DB_USER:3dify}
     password: ${DB_PASSWORD:3dify}
     driver-class-name: org.postgresql.Driver
@@ -101,3 +101,18 @@ logging:
     org.jooq: WARN
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{jobId}%X{userId}%X{apiKeyId}] - %msg%n"
+
+# Shopify-facing UI and product merchandising belong to a separate app project.
+shopify:
+  enabled: ${SHOPIFY_ENABLED:false}
+  client-id: ${SHOPIFY_CLIENT_ID:}
+  client-secret: ${SHOPIFY_CLIENT_SECRET:}
+  app-id: ${SHOPIFY_APP_ID:}
+  app-handle: ${SHOPIFY_APP_HANDLE:}
+  partner-org-id: ${SHOPIFY_PARTNER_ORG_ID:}
+  partner-access-token: ${SHOPIFY_PARTNER_ACCESS_TOKEN:}
+  api-version: "2026-07"
+  jobs-enabled: ${SHOPIFY_JOBS_ENABLED:true}
+  reconciliation-delay-ms: 60000
+  privacy-delay-ms: 60000
+  frontend-origins: ${SHOPIFY_FRONTEND_ORIGINS:}

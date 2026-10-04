@@ -31,7 +31,7 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
 
         // api_keys column for JOIN
         val AK_ID = DSL.field(DSL.name("api_keys", "id"), UUID::class.java)
-        val AK_USER_ID = DSL.field(DSL.name("api_keys", "user_id"), UUID::class.java)
+        val AK_USER_ID = DSL.field(DSL.name("api_keys", "created_by_user_id"), UUID::class.java)
 
         // All job columns (for SELECT)
         private val JOB_COLS = arrayOf(
@@ -61,6 +61,8 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
         dsl.insertInto(TABLE)
             .set(COL_ID, id)
             .set(COL_API_KEY_ID, apiKeyId)
+            .set(DSL.field("workspace_id", UUID::class.java), DSL.field("(SELECT workspace_id FROM api_keys WHERE id = ?)", UUID::class.java, apiKeyId))
+            .set(DSL.field("billing_scope_id", UUID::class.java), DSL.field("(SELECT billing_scope_id FROM api_keys WHERE id = ?)", UUID::class.java, apiKeyId))
             .set(COL_INPUT_IMAGE_1, imageKey1)
             .set(COL_INPUT_IMAGE_2, imageKey2)
             .execute()
@@ -127,7 +129,7 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
 
     private fun toEntity(r: org.jooq.Record) = JobEntity(
         id = r.get(J_ID)!!,
-        apiKeyId = r.get(J_API_KEY_ID)!!,
+        apiKeyId = r.get(J_API_KEY_ID),
         status = r.get(J_STATUS)!!,
         externalTaskId = r.get(J_EXTERNAL_TASK_ID),
         inputImage1 = r.get(J_INPUT_IMAGE_1)!!,

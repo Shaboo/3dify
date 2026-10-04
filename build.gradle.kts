@@ -19,7 +19,7 @@ plugins {
 group = "com.thridify"
 version = "0.0.1-SNAPSHOT"
 
-val localDatabaseUrl = providers.environmentVariable("DB_URL").getOrElse("jdbc:postgresql://localhost:5432/3dify")
+val localDatabaseUrl = providers.environmentVariable("DB_URL").getOrElse("jdbc:postgresql://localhost:5432/thridify")
 val localDatabaseUser = providers.environmentVariable("DB_USER").getOrElse("3dify")
 val localDatabasePassword = providers.environmentVariable("DB_PASSWORD").getOrElse("3dify")
 
@@ -152,4 +152,12 @@ kotlin.sourceSets.named("main") {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+// Keep explicit code generation ordered without making normal builds require a live database.
+tasks.named("compileKotlin") {
+    mustRunAfter("jooqCodegen")
+}
+tasks.named("jooqCodegen") {
+    mustRunAfter("flywayMigrate")
 }

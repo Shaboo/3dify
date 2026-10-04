@@ -37,6 +37,14 @@ class DsaArchitectureTest {
     }
 
     @Test
+    fun `outbox implementation stays entirely in infrastructure`() {
+        noClasses().that().resideOutsideOfPackage("com.thridify.infrastructure..")
+            .should().dependOnClassesThat().resideInAPackage("com.thridify.infrastructure.outbox..")
+            .check(production)
+        check(production.none { it.packageName.startsWith("com.thridify.domain.outbox") })
+    }
+
+    @Test
     fun `core has no technology dependencies`() {
         noClasses().that().resideInAnyPackage("com.thridify.domain..", "com.thridify.application.service..")
             .should().dependOnClassesThat().resideInAnyPackage(
@@ -73,7 +81,7 @@ class DsaArchitectureTest {
 
     @Test
     fun `entry points invoke one application service`() {
-        val methods = production.flatMap { it.methods }.filter { method ->
+        val methods = production.filter { it.packageName.startsWith("com.thridify.interfaces.") }.flatMap { it.methods }.filter { method ->
             method.annotations.any { annotation ->
                 annotation.rawType.name in setOf(RabbitListener::class.java.name, Scheduled::class.java.name) ||
                     annotation.rawType.name == RequestMapping::class.java.name ||

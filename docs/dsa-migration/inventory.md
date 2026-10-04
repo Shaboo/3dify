@@ -4,16 +4,17 @@ _Heuristic classification, confirm each row by reading the class._
 
 ## Summary
 
-- Files scanned: 152
-- Current layer: application=67, domain=38, infrastructure=25, interfaces=18, shared=3, none=1
-- Suggested layer: application=67, domain=41, infrastructure=25, interfaces=18, root=1
-- Role: model/value/util=37, use-case-orchestration=27, command/query/result=24, domain-service?=16, port=14, entry-point=12, persistence-adapter=8, integration-adapter=6, configuration=5, composition-root=1, api-or-message-dto=1, http-error-mapping=1
-- Flags: several-app-services (check no single handler composes them)=7, many-types-in-file=4
+- Files scanned: 153
+- Current layer: application=66, domain=35, infrastructure=31, interfaces=17, shared=3, none=1
+- Suggested layer: application=66, domain=38, infrastructure=30, interfaces=18, root=1
+- Role: model/value/util=37, use-case-orchestration=26, command/query/result=24, domain-service?=17, port=14, entry-point=12, persistence-adapter=9, integration-adapter=6, configuration=5, composition-root=1, api-or-message-dto=1, http-error-mapping=1
+- Flags: several-app-services (check no single handler composes them)=7, many-types-in-file=4, misplaced? infrastructure→interfaces=1
 
 ## Entry points (12) → one use case each (start the use-case list here)
 
 | Entry point | Annotations | Injects | Flags |
 |---|---|---|---|
+| `OutboxPublisher` (src/main/kotlin/com/thridify/infrastructure/outbox/OutboxPublisher.kt) | Component Scheduled |  | misplaced? infrastructure→interfaces |
 | `TaskWorker` (src/main/kotlin/com/thridify/interfaces/messaging/TaskWorker.kt) | Component RabbitListener | DispatchGenerationTaskApplicationService, ObjectMapper |  |
 | `AdminController` (src/main/kotlin/com/thridify/interfaces/rest/AdminController.kt) | RestController | CreatePlanApplicationService, DeactivatePlanApplicationService, ListPlansApplicationService, UpdatePlanApplicationService | several-app-services (check no single handler composes them): CreatePlanApplicationService,DeactivatePlanApplicationService,ListPlansApplicationService,UpdatePlanApplicationService |
 | `ApiKeyController` (src/main/kotlin/com/thridify/interfaces/rest/ApiKeyController.kt) | RestController | CreateApiKeyApplicationService, ListApiKeysApplicationService, RevokeApiKeyApplicationService | several-app-services (check no single handler composes them): CreateApiKeyApplicationService,ListApiKeysApplicationService,RevokeApiKeyApplicationService |
@@ -23,7 +24,6 @@ _Heuristic classification, confirm each row by reading the class._
 | `PublicPlanController` (src/main/kotlin/com/thridify/interfaces/rest/PublicPlanController.kt) | RestController | ListActivePlansApplicationService |  |
 | `SubscriptionController` (src/main/kotlin/com/thridify/interfaces/rest/SubscriptionController.kt) | RestController | CreateBillingPortalApplicationService, CreateCheckoutSessionApplicationService, GetSubscriptionStatusApplicationService | several-app-services (check no single handler composes them): CreateBillingPortalApplicationService,CreateCheckoutSessionApplicationService,GetSubscriptionStatusApplicationService |
 | `WebhookController` (src/main/kotlin/com/thridify/interfaces/rest/WebhookController.kt) | RestController | DeleteWebhookApplicationService, GetWebhookApplicationService, SetWebhookApplicationService | several-app-services (check no single handler composes them): DeleteWebhookApplicationService,GetWebhookApplicationService,SetWebhookApplicationService |
-| `OutboxPublisher` (src/main/kotlin/com/thridify/interfaces/scheduled/OutboxPublisher.kt) | Component Scheduled | PublishPendingGenerationTasksApplicationService |  |
 | `ProviderWebhookController` (src/main/kotlin/com/thridify/interfaces/webhook/ProviderWebhookController.kt) | RestController | HandleGenerationCallbackApplicationService |  |
 | `StripeWebhookController` (src/main/kotlin/com/thridify/interfaces/webhook/StripeWebhookController.kt) | RestController | HandleStripeWebhookApplicationService |  |
 
@@ -40,7 +40,7 @@ _Heuristic classification, confirm each row by reading the class._
 
 | File | Type | Current | Suggested | Role | Tech | Injects | Flags |
 |---|---|---|---|---|---|---|---|
-| src/main/kotlin/com/thridify/3difyApplication.kt | file `3difyApplication` | none | root package (no layer) | composition-root |  |  |  |
+| src/main/kotlin/com/thridify/ThridifyApplication.kt | class `ThridifyApplication` | none | root package (no layer) | composition-root |  |  |  |
 | src/main/kotlin/com/thridify/application/service/access/authorize/AuthorizeApiRequestApplicationService.kt | class `AuthorizeApiRequestApplicationService` | application | application | use-case-orchestration |  | ApiKeyRepository, SubscriptionRepository |  |
 | src/main/kotlin/com/thridify/application/service/access/authorize/AuthorizeApiRequestCommand.kt | class `AuthorizeApiRequestCommand` | application | application | command/query/result |  |  |  |
 | src/main/kotlin/com/thridify/application/service/apikey/create/ApiKeyCreatedResult.kt | class `ApiKeyCreatedResult` | application | application (keep; weak signal: domain) | model/value/util |  |  |  |
@@ -56,11 +56,10 @@ _Heuristic classification, confirm each row by reading the class._
 | src/main/kotlin/com/thridify/application/service/generation/callback/HandleGenerationCallbackCommand.kt | class `HandleGenerationCallbackCommand` | application | application | command/query/result |  |  |  |
 | src/main/kotlin/com/thridify/application/service/generation/dispatch/DispatchGenerationTaskApplicationService.kt | class `DispatchGenerationTaskApplicationService` | application | application | use-case-orchestration |  | GenerationProviderClient, JobHistoryRepository, JobRepository |  |
 | src/main/kotlin/com/thridify/application/service/generation/dispatch/DispatchGenerationTaskCommand.kt | class `DispatchGenerationTaskCommand` | application | application | command/query/result |  |  |  |
-| src/main/kotlin/com/thridify/application/service/generation/publish/PublishPendingGenerationTasksApplicationService.kt | class `PublishPendingGenerationTasksApplicationService` | application | application | use-case-orchestration |  | OutboxRepository |  |
 | src/main/kotlin/com/thridify/application/service/generation/submit/GenerateModelApplicationService.kt | class `GenerateModelApplicationService` | application | application | use-case-orchestration |  | GenerationTaskPublisher, JobHistoryRepository, JobRepository, TransactionProvider |  |
 | src/main/kotlin/com/thridify/application/service/generation/submit/GenerateModelCommand.kt | class `GenerateModelCommand` | application | application | command/query/result |  |  |  |
 | src/main/kotlin/com/thridify/application/service/generation/submit/GenerateResult.kt | class `GenerateResult` | application | application (keep; weak signal: domain) | model/value/util |  |  |  |
-| src/main/kotlin/com/thridify/application/service/generation/submit/GenerationImage(val.kt | class `GenerationImage` | application | application (keep; weak signal: domain) | model/value/util |  |  |  |
+| src/main/kotlin/com/thridify/application/service/generation/submit/GenerationImage.kt | class `GenerationImage` | application | application (keep; weak signal: domain) | model/value/util |  |  |  |
 | src/main/kotlin/com/thridify/application/service/identity/AuthResult.kt | class `AuthResult` | application | application (keep; weak signal: domain) | model/value/util |  |  |  |
 | src/main/kotlin/com/thridify/application/service/identity/authenticate/AuthenticateJwtApplicationService.kt | class `AuthenticateJwtApplicationService` | application | application | use-case-orchestration |  | TokenClient, UserRepository |  |
 | src/main/kotlin/com/thridify/application/service/identity/authenticate/AuthenticateJwtQuery.kt | class `AuthenticateJwtQuery` | application | application | command/query/result |  |  |  |
@@ -120,7 +119,6 @@ _Heuristic classification, confirm each row by reading the class._
 | src/main/kotlin/com/thridify/domain/generation/CustomerWebhookClient.kt | interface `CustomerWebhookClient` | domain | domain | port |  |  |  |
 | src/main/kotlin/com/thridify/domain/generation/GenerationPolicy.kt | class `GenerationPolicy` | domain | domain | domain-service? |  |  | many-types-in-file: 5 |
 | src/main/kotlin/com/thridify/domain/generation/GenerationProviderClient.kt | interface `GenerationProviderClient` | domain | domain | port |  |  |  |
-| src/main/kotlin/com/thridify/domain/generation/GenerationTaskDelivery.kt | interface `GenerationTaskDelivery` | domain | domain (or shared if purely technical) | model/value/util |  |  |  |
 | src/main/kotlin/com/thridify/domain/generation/GenerationTaskPublisher.kt | interface `GenerationTaskPublisher` | domain | domain | port |  |  |  |
 | src/main/kotlin/com/thridify/domain/generation/ImageStorage.kt | interface `ImageStorage` | domain | domain (or shared if purely technical) | model/value/util |  |  |  |
 | src/main/kotlin/com/thridify/domain/generation/JobNotification.kt | class `JobNotification` | domain | domain (or shared if purely technical) | model/value/util |  |  |  |
@@ -133,8 +131,6 @@ _Heuristic classification, confirm each row by reading the class._
 | src/main/kotlin/com/thridify/domain/job/JobHistoryEntity.kt | class `JobHistoryEntity` | domain | domain (or shared if purely technical) | model/value/util |  |  |  |
 | src/main/kotlin/com/thridify/domain/job/JobHistoryRepository.kt | interface `JobHistoryRepository` | domain | domain | port |  |  |  |
 | src/main/kotlin/com/thridify/domain/job/JobRepository.kt | interface `JobRepository` | domain | domain | port |  |  |  |
-| src/main/kotlin/com/thridify/domain/outbox/OutboxMessageEntity.kt | class `OutboxMessageEntity` | domain | domain (or shared if purely technical) | model/value/util |  |  |  |
-| src/main/kotlin/com/thridify/domain/outbox/OutboxRepository.kt | interface `OutboxRepository` | domain | domain | port |  |  |  |
 | src/main/kotlin/com/thridify/domain/plan/PlanEntity.kt | class `PlanEntity` | domain | domain (or shared if purely technical) | model/value/util |  |  |  |
 | src/main/kotlin/com/thridify/domain/plan/PlanPolicy.kt | class `PlanPolicy` | domain | domain | domain-service? |  |  |  |
 | src/main/kotlin/com/thridify/domain/plan/PlanRepository.kt | interface `PlanRepository` | domain | domain | port |  |  |  |
@@ -152,13 +148,19 @@ _Heuristic classification, confirm each row by reading the class._
 | src/main/kotlin/com/thridify/infrastructure/config/JacksonConfig.kt | class `JacksonConfig` | infrastructure | infrastructure (tech config) or owning layer | configuration | jackson |  |  |
 | src/main/kotlin/com/thridify/infrastructure/config/RabbitConfig.kt | class `RabbitConfig` | infrastructure | infrastructure | integration-adapter | rabbit |  |  |
 | src/main/kotlin/com/thridify/infrastructure/config/S3Config.kt | class `S3Config` | infrastructure | infrastructure | integration-adapter | aws |  |  |
-| src/main/kotlin/com/thridify/infrastructure/messaging/OutboxGenerationTaskPublisher.kt | class `OutboxGenerationTaskPublisher` | infrastructure | infrastructure (keep; weak signal: domain) | domain-service? | jackson | ObjectMapper, OutboxRepository |  |
-| src/main/kotlin/com/thridify/infrastructure/messaging/RabbitGenerationTaskDelivery.kt | class `RabbitGenerationTaskDelivery` | infrastructure | infrastructure (keep; weak signal: domain) | domain-service? | jackson | ObjectMapper |  |
 | src/main/kotlin/com/thridify/infrastructure/messaging/TaskProducer.kt | class `TaskProducer` | infrastructure | infrastructure | integration-adapter | jackson,rabbit | ObjectMapper, RabbitTemplate |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/GenerationTaskDelivery.kt | interface `GenerationTaskDelivery` | infrastructure | infrastructure (keep; weak signal: domain) | model/value/util |  |  |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/OutboxGenerationTaskPublisher.kt | class `OutboxGenerationTaskPublisher` | infrastructure | infrastructure (keep; weak signal: domain) | domain-service? | jackson | ObjectMapper, OutboxRepository |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/OutboxMessageEntity.kt | class `OutboxMessageEntity` | infrastructure | infrastructure (keep; weak signal: domain) | model/value/util |  |  |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/OutboxPublisher.kt | class `OutboxPublisher` | infrastructure | interfaces | entry-point |  |  | misplaced? infrastructure→interfaces |
+| src/main/kotlin/com/thridify/infrastructure/outbox/OutboxRelay.kt | class `OutboxRelay` | infrastructure | infrastructure (keep; weak signal: domain) | domain-service? |  | OutboxRepository |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/OutboxRepository.kt | interface `OutboxRepository` | infrastructure | infrastructure (keep; weak signal: domain) | port |  |  |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/PostgresOutboxRepository.kt | class `PostgresOutboxRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
+| src/main/kotlin/com/thridify/infrastructure/outbox/RabbitGenerationTaskDelivery.kt | class `RabbitGenerationTaskDelivery` | infrastructure | infrastructure (keep; weak signal: domain) | domain-service? | jackson | ObjectMapper |  |
+| src/main/kotlin/com/thridify/infrastructure/persistence/DirectWorkspaceLookup.kt | class `DirectWorkspaceLookup` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
 | src/main/kotlin/com/thridify/infrastructure/persistence/PostgresApiKeyRepository.kt | class `PostgresApiKeyRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
 | src/main/kotlin/com/thridify/infrastructure/persistence/PostgresJobHistoryRepository.kt | class `PostgresJobHistoryRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
 | src/main/kotlin/com/thridify/infrastructure/persistence/PostgresJobRepository.kt | class `PostgresJobRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
-| src/main/kotlin/com/thridify/infrastructure/persistence/PostgresOutboxRepository.kt | class `PostgresOutboxRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
 | src/main/kotlin/com/thridify/infrastructure/persistence/PostgresPlanRepository.kt | class `PostgresPlanRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
 | src/main/kotlin/com/thridify/infrastructure/persistence/PostgresSubscriptionRepository.kt | class `PostgresSubscriptionRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
 | src/main/kotlin/com/thridify/infrastructure/persistence/PostgresUserRepository.kt | class `PostgresUserRepository` | infrastructure | infrastructure | persistence-adapter | jooq | DSLContext |  |
@@ -186,7 +188,6 @@ _Heuristic classification, confirm each row by reading the class._
 | src/main/kotlin/com/thridify/interfaces/rest/exceptions/GlobalExceptionHandler.kt | class `GlobalExceptionHandler` | interfaces | interfaces | http-error-mapping | jackson,spring-web | ObjectMapper |  |
 | src/main/kotlin/com/thridify/interfaces/rest/filter/ApiKeyAuthFilter.kt | class `ApiKeyAuthFilter` | interfaces | interfaces (keep; weak signal: domain) | domain-service? | spring-web | AuthorizeApiRequestApplicationService |  |
 | src/main/kotlin/com/thridify/interfaces/rest/filter/JwtAuthFilter.kt | class `JwtAuthFilter` | interfaces | interfaces (keep; weak signal: domain) | domain-service? | spring-web | AuthenticateJwtApplicationService |  |
-| src/main/kotlin/com/thridify/interfaces/scheduled/OutboxPublisher.kt | class `OutboxPublisher` | interfaces | interfaces | entry-point |  | PublishPendingGenerationTasksApplicationService |  |
 | src/main/kotlin/com/thridify/interfaces/webhook/ProviderWebhookController.kt | class `ProviderWebhookController` | interfaces | interfaces | entry-point | spring-web | HandleGenerationCallbackApplicationService |  |
 | src/main/kotlin/com/thridify/interfaces/webhook/StripeWebhookController.kt | class `StripeWebhookController` | interfaces | interfaces | entry-point | spring-web | HandleStripeWebhookApplicationService |  |
 | src/main/kotlin/com/thridify/shared/exception/ApiException.kt | class `ApiException` | shared | domain (or shared if purely technical) | model/value/util |  |  | many-types-in-file: 5 |

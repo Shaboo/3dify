@@ -91,7 +91,7 @@ class SubscriptionControllerTest : IntegrationTestBase() {
         // Verify subscription was created in DB
         val count = dsl.fetchCount(
             dsl.selectOne().from("subscriptions")
-                .where("user_id = '$userId'"),
+                .where("billing_scope_id = '${scopeId(userId)}'"),
         )
         assert(count == 1)
     }
@@ -139,8 +139,8 @@ class SubscriptionControllerTest : IntegrationTestBase() {
     private fun activateFreePlan() {
         dsl.execute(
             """
-            INSERT INTO subscriptions (id, user_id, plan_id, status, created_at)
-            VALUES (gen_random_uuid(), '$userId', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'active', now())
+            INSERT INTO subscriptions (id, billing_scope_id, provider, plan_id, status, created_at)
+            VALUES (gen_random_uuid(), '${scopeId(userId)}', 'internal', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'active', now())
             """.trimIndent(),
         )
     }

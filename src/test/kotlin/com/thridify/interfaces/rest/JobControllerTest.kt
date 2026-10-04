@@ -94,8 +94,8 @@ class JobControllerTest : IntegrationTestBase() {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO api_keys (id, user_id, plan_id, key_hash, key_prefix, is_active, created_at)
-            VALUES ('$id', '$userId', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+            INSERT INTO api_keys (id, workspace_id, billing_scope_id, created_by_user_id, plan_id, key_hash, key_prefix, is_active, created_at)
+            VALUES ('$id', '${workspaceId(userId)}', '${scopeId(userId)}', '$userId', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
                     'testhash', 'omni_pk_test', true, now())
             """.trimIndent(),
         )
@@ -106,8 +106,8 @@ class JobControllerTest : IntegrationTestBase() {
         val id = UUID.randomUUID()
         dsl.execute(
             """
-            INSERT INTO jobs (id, api_key_id, status, input_image_1, input_image_2, created_at)
-            VALUES ('$id', '$apiKeyId', 'PENDING', 'inputs/a.png', 'inputs/b.png', now())
+            INSERT INTO jobs (id, workspace_id, billing_scope_id, api_key_id, status, input_image_1, input_image_2, created_at)
+            VALUES ('$id', '${workspaceId(userId)}', '${scopeId(userId)}', '$apiKeyId', 'PENDING', 'inputs/a.png', 'inputs/b.png', now())
             """.trimIndent(),
         )
         return id

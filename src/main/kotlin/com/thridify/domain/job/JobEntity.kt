@@ -5,7 +5,7 @@ import java.util.UUID
 
 data class JobEntity(
     val id: UUID,
-    val apiKeyId: UUID,
+    val apiKeyId: UUID?,
     val status: String,
     val externalTaskId: String?,
     val inputImage1: String,

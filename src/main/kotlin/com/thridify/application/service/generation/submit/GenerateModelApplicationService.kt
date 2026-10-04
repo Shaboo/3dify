@@ -36,9 +36,9 @@ class GenerateModelApplicationService(
             try {
                 jobs.insert(id, command.apiKeyId, key1, key2)
                 history.insert(id, "PENDING", "Job created")
-                publisher.enqueue(id, key1, key2)
+                publisher.publish(id, key1, key2)
                 metrics.jobsCreated.increment()
-                log.info("Job {} created and queued in outbox", id)
+                log.info("Job {} created and submitted for generation", id)
                 GenerateResult(id, "PENDING")
             } finally {
                 MDC.remove("jobId")
