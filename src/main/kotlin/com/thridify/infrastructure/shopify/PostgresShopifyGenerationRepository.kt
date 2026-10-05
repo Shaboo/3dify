@@ -11,17 +11,22 @@ import java.util.UUID
 
 @Repository
 class PostgresShopifyGenerationRepository(private val dsl: DSLContext, private val jobs: JobRepository) : ShopifyGenerationRepository {
+    override fun lock(store: ShopifyStore) {
+        val connection = dsl.fetchOne("SELECT status FROM platform_connections WHERE id = ? FOR UPDATE", store.connectionId)
+        if (connection?.get("status", String::class.java) != "connected") throw ApiException(403, "The Shopify app is disconnected")
+    }
+
     override fun findRequest(scopeId: UUID, requestId: UUID): JobEntity? = dsl.fetchOne("SELECT id FROM jobs WHERE billing_scope_id = ? AND idempotency_key = ?", scopeId, requestId)?.get("id", UUID::class.java)?.let(jobs::findById)
 
     override fun insert(store: ShopifyStore, requestId: UUID, jobId: UUID, image1: String, image2: String): JobEntity {
-        val connection = dsl.fetchOne("SELECT status FROM platform_connections WHERE id = ? FOR UPDATE", store.connectionId)
-        if (connection?.get("status", String::class.java) != "connected") throw ApiException(403, "The Shopify app is disconnected")
+        lock(store)
         findRequest(store.billingScopeId, requestId)?.let { return it }
         val consumed = dsl.fetchOne(
             """
             UPDATE usage_periods u SET generations_consumed = u.generations_consumed + 1
             FROM subscriptions s
-            WHERE s.billing_scope_id = u.billing_scope_id AND s.current_period_start = u.period_start
+            WHERE s.billing_scope_id = u.billing_scope_id
+              AND u.period_start = (SELECT MAX(period_start) FROM usage_periods WHERE billing_scope_id = s.billing_scope_id AND period_start <= now() AND period_end > now())
               AND s.billing_scope_id = ? AND s.provider = 'shopify' AND s.status IN ('active', 'trialing')
               AND s.current_period_end > now() AND u.period_start <= now() AND u.period_end > now()
               AND u.generations_consumed + u.generations_reserved < u.generation_limit

@@ -88,6 +88,7 @@ class ShopifyBackendTest : IntegrationTestBase() {
         every { billing.pricingUrl(any()) } returns "https://admin.shopify.com/store/alpha/charges/thridify/pricing_plans"
         every { storage.upload(any(), any(), any()) } returns "stored"
         every { deletion.deleteInput(any()) } just Runs
+        every { deletion.deleteOutput(any()) } just Runs
     }
 
     private fun token(shop: String = "alpha", audience: String = "test-client"): String = Jwts.builder().subject("42").audience().add(audience).and()
@@ -154,6 +155,87 @@ class ShopifyBackendTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `concurrent retries at the quota boundary return the same job and clean losing uploads`() {
+        val scope = connect()
+        dsl.execute("UPDATE plans SET monthly_quota = 1 WHERE name = 'pro'")
+        val ready = java.util.concurrent.CountDownLatch(2)
+        every { storage.upload(match { it.endsWith("one.png") }, any(), any()) } answers {
+            ready.countDown()
+            check(ready.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            "stored"
+        }
+        val request = UUID.randomUUID()
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val futures = (1..2).map {
+                pool.submit<String> {
+                    val response = generate(request = request).andExpect(status().isAccepted).andReturn()
+                    mapper.readTree(response.response.contentAsString).path("jobId").asText()
+                }
+            }
+            assertEquals(futures[0].get(20, java.util.concurrent.TimeUnit.SECONDS), futures[1].get(20, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals(1, consumed(scope))
+            assertEquals(1, count("jobs"))
+            assertEquals(1, count("job_history"))
+            assertEquals(1, count("outbox_messages"))
+            verify(exactly = 2) { deletion.deleteInput(any()) }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `annual plan grants only the current monthly allowance and preserves earlier usage`() {
+        val scope = connect()
+        dsl.execute("UPDATE plan_offers SET billing_interval = 'yearly' WHERE provider = 'shopify'")
+        val annualStart = OffsetDateTime.now().minusMonths(2).minusDays(1)
+        every { billing.currentSubscription(any()) } returns ShopifyBillingSnapshot(setOf("pro"), "yearly", "active", annualStart, annualStart.plusYears(1), null)
+        dsl.execute("INSERT INTO usage_periods (billing_scope_id, period_start, period_end, generation_limit, generations_consumed) VALUES (?, ?, ?, 2, 2)", scope, java.sql.Timestamp.from(annualStart.toInstant()), java.sql.Timestamp.from(annualStart.plusMonths(1).toInstant()))
+        mockMvc.perform(get("/shopify/api/subscription").header("Authorization", "Bearer ${token()}"))
+            .andExpect(status().isOk).andExpect(jsonPath("$.generationLimit").value(2))
+            .andExpect(jsonPath("$.generationsConsumed").value(0))
+            .andExpect(jsonPath("$.allowancePeriodStart").exists()).andExpect(jsonPath("$.allowancePeriodEnd").exists())
+        generate().andExpect(status().isAccepted)
+        generate().andExpect(status().isAccepted)
+        generate().andExpect(status().isTooManyRequests)
+        assertEquals(2, count("usage_periods"))
+        assertEquals(4, dsl.fetchOne("SELECT sum(generations_consumed)::int AS total FROM usage_periods WHERE billing_scope_id = ?", scope)!!.get("total", Int::class.java))
+    }
+
+    @Test
+    fun `unsupported image types are rejected before storage or quota consumption`() {
+        connect()
+        mockMvc.perform(
+            multipart("/shopify/api/models")
+                .file(MockMultipartFile("image1", "one.svg", "image/svg+xml", byteArrayOf(1)))
+                .file(MockMultipartFile("image2", "two.png", "image/png", byteArrayOf(2)))
+                .header("Authorization", "Bearer ${token()}").header("Idempotency-Key", UUID.randomUUID()),
+        )
+            .andExpect(status().isBadRequest)
+        verify(exactly = 0) { storage.upload(any(), any(), any()) }
+        assertEquals(0, count("jobs"))
+    }
+
+    @Test
+    fun `invalid generation request identifiers and missing images return bad requests`() {
+        connect()
+        mockMvc.perform(
+            multipart("/shopify/api/models")
+                .file(MockMultipartFile("image1", "one.png", "image/png", byteArrayOf(1)))
+                .file(MockMultipartFile("image2", "two.png", "image/png", byteArrayOf(2)))
+                .header("Authorization", "Bearer ${token()}").header("Idempotency-Key", "invalid"),
+        )
+            .andExpect(status().isBadRequest)
+        mockMvc.perform(
+            multipart("/shopify/api/models")
+                .file(MockMultipartFile("image1", "one.png", "image/png", byteArrayOf(1)))
+                .header("Authorization", "Bearer ${token()}").header("Idempotency-Key", UUID.randomUUID()),
+        )
+            .andExpect(status().isBadRequest)
+        verify(exactly = 0) { storage.upload(any(), any(), any()) }
+    }
+
+    @Test
     fun `models cannot be read from another store`() {
         connect()
         connect("beta")
@@ -212,11 +294,30 @@ class ShopifyBackendTest : IntegrationTestBase() {
         assertEquals(null, dsl.fetchOne("SELECT completed_at FROM shopify_webhook_receipts WHERE event_id = 'redact-event'")!!.get("completed_at"))
         mockMvc.perform(post("/shopify/api/connection").header("Authorization", "Bearer ${token()}")).andExpect(status().isConflict)
         every { deletion.deleteInput(any()) } just Runs
+        every { deletion.deleteOutput(any()) } just Runs
         redact.execute()
         assertEquals(1, count("jobs"))
         assertEquals(1, count("platform_connections"))
         assertEquals(1, count("outbox_messages"))
         assertEquals(null, dsl.fetchOne("SELECT shop_id FROM shopify_webhook_receipts WHERE event_id = 'redact-event'")!!.get("shop_id"))
+    }
+
+    @Test
+    fun `privacy cleanup deletes generated outputs and retries before removing database records`() {
+        connect()
+        val result = generate().andExpect(status().isAccepted).andReturn()
+        val id = UUID.fromString(mapper.readTree(result.response.contentAsString).path("jobId").asText())
+        val output = "https://assets.example/outputs/$id/model.glb"
+        dsl.execute("UPDATE jobs SET output_glb_url = ? WHERE id = ?", output, id)
+        webhook("app/uninstalled")
+        webhook("shop/redact", event = "output-redaction")
+        every { deletion.deleteOutput(output) } throws IllegalStateException("output deletion unavailable")
+        redact.execute()
+        assertEquals(1, count("jobs"))
+        every { deletion.deleteOutput(output) } just Runs
+        redact.execute()
+        assertEquals(0, count("jobs"))
+        verify(exactly = 2) { deletion.deleteOutput(output) }
     }
 
     @Test

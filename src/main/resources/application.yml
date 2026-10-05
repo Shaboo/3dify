@@ -30,6 +30,11 @@ spring:
       host: localhost
       port: 6379
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 42MB
+
   mvc:
     log-request-details: false
 
@@ -67,10 +72,11 @@ omni3d:
     expiration-ms: 86400000  # 24 hours
 
   r2:
-    endpoint: ""
-    access-key: ""
-    secret-key: ""
-    bucket: ""
+    endpoint: "${R2_ENDPOINT:}"
+    access-key: "${R2_ACCESS_KEY:}"
+    secret-key: "${R2_SECRET_KEY:}"
+    bucket: "${R2_BUCKET:}"
+    public-url: "${R2_PUBLIC_URL:}"
     token: ""
 
   rabbitmq:
@@ -79,9 +85,10 @@ omni3d:
     routing-key: generate.3d
 
   runpod:
-    api-url: "https://api.runpod.io/v2/endpoint/submit"
-    api-key: "runpod_test_key_placeholder"
-    webhook-url: "http://localhost:8080/internal/webhooks/runpod"
+    enabled: ${RUNPOD_ENABLED:false}
+    api-url: "${RUNPOD_API_URL:}"
+    api-key: "${RUNPOD_API_KEY:}"
+    webhook-url: "${RUNPOD_WEBHOOK_URL:}"
 
 # --- Stripe ---
 stripe:

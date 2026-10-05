@@ -11,6 +11,7 @@ data class ShopifyProperties(
     var appHandle: String = "",
     var partnerOrgId: String = "",
     var partnerAccessToken: String = "",
+    var partnerRequestIntervalMs: Long = 300,
     var apiVersion: String = "2026-07",
     var frontendOrigins: List<String> = emptyList(),
 ) {

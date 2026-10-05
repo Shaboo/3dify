@@ -54,6 +54,16 @@ class PostgresShopifyWebhookRepository(private val dsl: DSLContext) : ShopifyWeb
         Timestamp.from(event.occurredAt.toInstant()),
     ).flatMap { listOf(it.get("input_image_1", String::class.java)!!, it.get("input_image_2", String::class.java)!!) }
 
+    override fun outputsForRedaction(event: ShopifyWebhook): List<String> = dsl.fetch(
+        """
+        SELECT j.output_glb_url, j.output_usdz_url FROM jobs j JOIN billing_scopes b ON b.id = j.billing_scope_id
+        JOIN platform_connections c ON c.id = b.connection_id
+        WHERE c.platform = 'shopify' AND c.external_id = ? AND c.status = 'redacting' AND c.installed_at <= ?
+        """.trimIndent(),
+        event.shopId,
+        Timestamp.from(event.occurredAt.toInstant()),
+    ).flatMap { listOfNotNull(it.get("output_glb_url", String::class.java), it.get("output_usdz_url", String::class.java)) }
+
     override fun completeRedaction(event: ShopifyWebhook) {
         val connection = dsl.fetchOne("SELECT * FROM platform_connections WHERE platform = 'shopify' AND external_id = ? FOR UPDATE", event.shopId)
         if (connection == null || connection.get("status", String::class.java) == "connected" || connection.get("installed_at", OffsetDateTime::class.java)!!.isAfter(event.occurredAt)) {

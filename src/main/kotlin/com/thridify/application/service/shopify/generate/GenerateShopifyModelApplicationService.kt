@@ -25,10 +25,17 @@ class GenerateShopifyModelApplicationService(private val sessions: ShopifySessio
         val store = access.connected(stores.findByDomain(sessions.verify(command.idToken).shopDomain))
         generations.findRequest(store.billingScopeId, command.requestId)?.let { return GenerateResult(it.id, it.status) }
         images.ensureImagesPresent(command.image1.data.size, command.image2.data.size)
+        access.image(command.image1.data.size, command.image1.contentType)
+        access.image(command.image2.data.size, command.image2.contentType)
         val observedAt = OffsetDateTime.now()
         val snapshot = billing.currentSubscription(store.shopId)
-        val entitlement = transactions.transaction { stores.synchronize(store, snapshot, observedAt) }
-        access.generation(entitlement, OffsetDateTime.now())
+        val previous = transactions.transaction {
+            generations.lock(store)
+            generations.findRequest(store.billingScopeId, command.requestId).also {
+                if (it == null) access.generation(stores.synchronize(store, snapshot, observedAt), OffsetDateTime.now())
+            }
+        }
+        previous?.let { return GenerateResult(it.id, it.status) }
         val id = UUID.randomUUID()
         val first = "shopify/${store.billingScopeId}/${images.inputKey(command.image1.filename)}"
         val second = "shopify/${store.billingScopeId}/${images.inputKey(command.image2.filename)}"
@@ -37,7 +44,9 @@ class GenerateShopifyModelApplicationService(private val sessions: ShopifySessio
             storage.upload(first, command.image1.data, command.image1.contentType)
             storage.upload(second, command.image2.data, command.image2.contentType)
             val result = transactions.transaction {
-                access.generation(stores.synchronize(store, snapshot, observedAt), OffsetDateTime.now())
+                generations.lock(store)
+                val duplicate = generations.findRequest(store.billingScopeId, command.requestId)
+                if (duplicate == null) access.generation(stores.synchronize(store, snapshot, observedAt), OffsetDateTime.now())
                 val job = generations.insert(store, command.requestId, id, first, second)
                 if (job.id == id) {
                     history.insert(id, "PENDING", "Job created through Shopify")

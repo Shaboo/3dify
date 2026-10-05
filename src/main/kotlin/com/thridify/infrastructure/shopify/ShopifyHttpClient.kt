@@ -20,6 +20,9 @@ class ShopifyHttpClient(private val mapper: ObjectMapper) {
         headers.forEach { (name, value) -> request.header(name, value) }
         val response = try {
             client.send(request.build(), HttpResponse.BodyHandlers.ofString())
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw ApiException(503, "Shopify request was interrupted")
         } catch (_: Exception) {
             throw ApiException(502, "Shopify is temporarily unavailable")
         }
@@ -32,12 +35,27 @@ class ShopifyHttpClient(private val mapper: ObjectMapper) {
             }
             throw ApiException(status, if (status == 401) "Shopify authorization expired; reopen the app" else "Shopify request could not be completed")
         }
+        return parse(response.body())
+    }
+
+    internal fun parse(body: String): JsonNode {
         val result = try {
-            mapper.readTree(response.body())
+            mapper.readTree(body)
         } catch (_: Exception) {
             throw ApiException(502, "Invalid Shopify response")
         }
-        if (result.path("errors").isArray && !result.path("errors").isEmpty) throw ApiException(502, "Shopify could not complete the operation")
+        if (result == null || !result.isObject) throw ApiException(502, "Invalid Shopify response")
+        val errors = result.path("errors")
+        if (!errors.isMissingNode && (!errors.isArray || !errors.isEmpty)) {
+            val codes = errors.map { it.path("extensions").path("code").asText() }.toSet()
+            val status = when {
+                "ACCESS_DENIED" in codes -> 403
+                "THROTTLED" in codes -> 503
+                "UNAUTHENTICATED" in codes -> 401
+                else -> 502
+            }
+            throw ApiException(status, "Shopify could not complete the operation")
+        }
         return result
     }
 }

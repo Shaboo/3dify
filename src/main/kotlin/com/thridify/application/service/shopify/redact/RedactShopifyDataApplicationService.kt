@@ -13,6 +13,7 @@ class RedactShopifyDataApplicationService(private val receipts: ShopifyWebhookRe
         for (event in receipts.pendingRedactions(5)) {
             try {
                 receipts.assetsForRedaction(event).forEach(deletion::deleteInput)
+                receipts.outputsForRedaction(event).forEach(deletion::deleteOutput)
                 transactions.transaction { receipts.completeRedaction(event) }
             } catch (ex: Exception) {
                 log.warn("Shopify privacy request {} remains pending", event.eventId, ex)

@@ -6,8 +6,8 @@
 - Scope: the complete Kotlin/Spring backend, including authentication filters, REST endpoints, Stripe and RunPod callbacks, Rabbit consumer, and outbox scheduler.
 - Source architecture: classic Spring services moved into DSA-named packages without dependency inversion or use-case separation.
 - Target: layer-first DSA, one application-service class per business use case, one public execution method per class.
-- Status: structural DSA migration complete. Subsequent user-authorized changes: namespace rename, infrastructure-only outbox, and fresh workspace/store-billing schema. Shopify runtime and explicit workspace authorization remain pending.
-- Working tree was clean at discovery start. Changes remain local and reviewable; no commits or deployment performed.
+- Status: structural DSA migration complete. Workspace/store-scoped Shopify backend is implemented and hardened; the separate merchant app is implemented in `3dify-shopify`. Live Shopify/provider validation remains pending credentials. Explicit multi-workspace/staff authorization and WooCommerce are deferred by user decision (2026-10-05).
+- Historical discovery started with a clean working tree. Migration and Shopify/CI work have since been committed and pushed; no deployment has been performed. See `docs/handoffs/README.md` for current session state.
 
 ## Original DSA contract freeze (historical)
 
@@ -144,3 +144,9 @@ Update this file after each slice with changed classes, validation results and r
 - Updated README, architecture overview, system flows, schema/setup guide and inventory.
 
 - Fresh-baseline validation: Flyway migration and jOOQ generation succeeded against local `thridify`; full build passed with 102 tests, including eight architecture checks and PostgreSQL schema-isolation regressions.
+
+## Shopify hardening and separate app (2026-10-05)
+
+The user confirmed remote CI works and scoped remaining work to Shopify/backend hardening; broader workspaces/staff/API-key authorization and WooCommerce are deferred. Annual Shopify allowance resets monthly, anchored to the provider cycle start. Concurrent retry/last-quota behavior is serialized and covered by a two-thread database integration regression. Billing history explicitly searches older windows so freezes do not disappear at the historical API default window. Malformed upstream responses and GraphQL permissions/throttling are mapped intentionally. Generated outputs join retryable privacy deletion. RunPod simulation is removed in favor of disabled-by-default real async dispatch, with an explicit worker/output-storage contract. Callback terminal failures and incomplete outputs fail the job.
+
+The earlier execution log is historical: direct Stripe/general API behavior and their pre-existing idempotency/transaction findings are not all changed by this Shopify-scoped task. Live verification requires credentials and a provisioned inference worker. See `docs/shopify/LAUNCH.md` and current session handoff.

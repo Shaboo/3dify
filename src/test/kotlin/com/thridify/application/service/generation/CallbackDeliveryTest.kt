@@ -41,12 +41,12 @@ class CallbackDeliveryTest {
         every { jobs.findUserIdByJobId(id) } returns user
         every { webhooks.findByUserId(user) } returns WebhookEntity(UUID.randomUUID(), user, "https://customer/callback", OffsetDateTime.now(), null)
         every { client.deliver(any(), any()) } throws IllegalStateException("customer offline")
-        val result = service.execute(HandleGenerationCallbackCommand(id, "task", "COMPLETED", true, null, null))
+        val result = service.execute(HandleGenerationCallbackCommand(id, "task", "COMPLETED", true, "https://assets/model.glb", "https://assets/model.usdz"))
         assertEquals(GenerationCallbackResult.ACCEPTED, result)
         verifyOrder {
-            jobs.markSuccess(id, "", "")
-            history.insert(id, "SUCCESS", "GLB:  | USDZ: ")
-            client.deliver("https://customer/callback", JobNotification(id, "SUCCESS", "", ""))
+            jobs.markSuccess(id, "https://assets/model.glb", "https://assets/model.usdz")
+            history.insert(id, "SUCCESS", "GLB: https://assets/model.glb | USDZ: https://assets/model.usdz")
+            client.deliver("https://customer/callback", JobNotification(id, "SUCCESS", "https://assets/model.glb", "https://assets/model.usdz"))
         }
         assertEquals(1.0, metrics.jobsCompleted.count())
         assertEquals(1.0, metrics.webhookDeliveriesFailed.count())
@@ -66,15 +66,16 @@ class CallbackDeliveryTest {
     }
 
     @Test
-    fun `completed callback without an output object preserves processing state`() {
+    fun `completed callback without an output object fails the job`() {
         every { jobs.findByExternalTaskId("task") } returns job
+        every { jobs.findUserIdByJobId(id) } returns null
         assertEquals(
             GenerationCallbackResult.ACCEPTED,
             service.execute(HandleGenerationCallbackCommand(id, "task", "COMPLETED", false, null, null)),
         )
-        verify { history wasNot Called }
+        verify { history.insert(id, "FAILED", "GPU Provider returned incomplete model outputs") }
         verify { client wasNot Called }
         verify(exactly = 0) { jobs.markSuccess(any(), any(), any()) }
-        verify(exactly = 0) { jobs.markFailed(any(), any()) }
+        verify(exactly = 1) { jobs.markFailed(id, "GPU Provider returned incomplete model outputs") }
     }
 }

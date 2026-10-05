@@ -79,7 +79,7 @@ Dispatch errors record `FAILED` and do not notify the user. Completion callbacks
 
 The customer notification JSON remains `jobId`, `status`, `outputGlbUrl`, and `outputUsdzUrl`. Task wire JSON remains `jobId`, `inputImage1Key`, and `inputImage2Key`.
 
-The development RunPod adapter generates a mock task ID and simulates a completion callback after a delay. Real dispatch remains commented out in that adapter.
+RunPod dispatch uses the configured HTTPS asynchronous `/run` endpoint and returns its real task ID. It is disabled by default; no simulated task IDs or outputs are produced. Workers read the input object keys and store both GLB and USDZ under the managed `outputs/<jobId>/` prefix.
 
 ## Billing
 

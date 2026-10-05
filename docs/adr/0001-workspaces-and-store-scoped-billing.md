@@ -80,3 +80,7 @@ The existing direct-user HTTP API remains operational through its default worksp
 ## Deferred decisions
 
 Final Shopify pricing and allowance sizes; free-plan period boundaries; usage reservation/release/refund semantics; upgrade/downgrade treatment; WooCommerce distribution and billing; cross-store sharing; workspace transfer/merging; data retention after uninstall; mapping Shopify staff permissions to workspace roles.
+
+## Annual Shopify allowance decision — 2026-10-05
+
+The user selected monthly resets for annual offers. An annual subscription receives the plan's `monthly_quota` each calendar month anchored to its original provider cycle start, bounded by the provider cycle end. There is no rollover. Provider subscription dates remain distinct from allowance dates in the Shopify subscription API. Monthly provider offers retain one allowance per provider cycle. Upgrade/downgrade synchronization preserves consumed/reserved usage and never reduces the stored quota below it.

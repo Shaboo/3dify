@@ -15,9 +15,9 @@ class GetShopifySubscriptionApplicationService(private val sessions: ShopifySess
         val observedAt = OffsetDateTime.now()
         val snapshot = billing.currentSubscription(store.shopId)
         val entitlement = transactions.transaction { stores.synchronize(store, snapshot, observedAt) }
-        return ShopifySubscriptionResult(entitlement.status, entitlement.planName, entitlement.periodEnd?.toString(), entitlement.generationLimit, entitlement.generationsConsumed, billing.pricingUrl(store.shopDomain))
+        return ShopifySubscriptionResult(entitlement.status, entitlement.planName, entitlement.periodEnd?.toString(), entitlement.generationLimit, entitlement.generationsConsumed, billing.pricingUrl(store.shopDomain), entitlement.allowancePeriodStart?.toString(), entitlement.allowancePeriodEnd?.toString())
     }
 }
 
 data class GetShopifySubscriptionQuery(val idToken: String)
-data class ShopifySubscriptionResult(val status: String, val planName: String?, val periodEnd: String?, val generationLimit: Int, val generationsConsumed: Int, val pricingUrl: String)
+data class ShopifySubscriptionResult(val status: String, val planName: String?, val periodEnd: String?, val generationLimit: Int, val generationsConsumed: Int, val pricingUrl: String, val allowancePeriodStart: String?, val allowancePeriodEnd: String?)

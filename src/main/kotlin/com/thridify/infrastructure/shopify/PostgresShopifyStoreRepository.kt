@@ -1,5 +1,6 @@
 package com.thridify.infrastructure.shopify
 
+import com.thridify.domain.shopify.ShopifyAllowancePolicy
 import com.thridify.domain.shopify.ShopifyBillingSnapshot
 import com.thridify.domain.shopify.ShopifyEntitlement
 import com.thridify.domain.shopify.ShopifyShop
@@ -14,7 +15,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 @Repository
-class PostgresShopifyStoreRepository(private val dsl: DSLContext) : ShopifyStoreRepository {
+class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val allowances: ShopifyAllowancePolicy) : ShopifyStoreRepository {
     private val storeQuery = "SELECT c.*, b.id AS scope_id FROM platform_connections c JOIN billing_scopes b ON b.connection_id = c.id WHERE c.platform = 'shopify'"
 
     override fun connect(shop: ShopifyShop): ShopifyStore {
@@ -64,6 +65,7 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext) : ShopifyStore
         } else {
             dsl.execute("UPDATE subscriptions SET plan_id = ?, external_subscription_id = ?, status = ?, current_period_start = ?, current_period_end = ?, updated_at = now() WHERE id = ?", planId, snapshot.externalSubscriptionId, snapshot.status, Timestamp.from(start.toInstant()), Timestamp.from(snapshot.periodEnd.toInstant()), id)
         }
+        val allowance = allowances.period(start, snapshot.periodEnd, snapshot.interval, OffsetDateTime.now())
         dsl.execute(
             """
             INSERT INTO usage_periods (billing_scope_id, period_start, period_end, generation_limit)
@@ -73,8 +75,8 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext) : ShopifyStore
                 generation_limit = GREATEST(EXCLUDED.generation_limit, usage_periods.generations_reserved + usage_periods.generations_consumed)
             """.trimIndent(),
             store.billingScopeId,
-            Timestamp.from(start.toInstant()),
-            Timestamp.from(snapshot.periodEnd.toInstant()),
+            Timestamp.from(allowance.start.toInstant()),
+            Timestamp.from(allowance.end.toInstant()),
             plan.get("monthly_quota", Int::class.java),
         )
         return entitlement(store.billingScopeId)
@@ -88,9 +90,12 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext) : ShopifyStore
     private fun entitlement(scope: UUID): ShopifyEntitlement {
         val r = dsl.fetchOne(
             """
-            SELECT s.*, p.name, u.generation_limit, u.generations_consumed FROM subscriptions s
+            SELECT s.*, p.name, u.generation_limit, u.generations_consumed, u.period_start AS allowance_start, u.period_end AS allowance_end FROM subscriptions s
             JOIN plans p ON p.id = s.plan_id
-            LEFT JOIN usage_periods u ON u.billing_scope_id = s.billing_scope_id AND u.period_start = s.current_period_start
+            LEFT JOIN LATERAL (
+                SELECT * FROM usage_periods WHERE billing_scope_id = s.billing_scope_id
+                AND period_start <= now() AND period_end > now() ORDER BY period_start DESC LIMIT 1
+            ) u ON true
             WHERE s.billing_scope_id = ? AND s.provider = 'shopify' AND s.status NOT IN ('canceled', 'expired', 'incomplete_expired')
             """.trimIndent(),
             scope,
@@ -103,6 +108,8 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext) : ShopifyStore
             r.get("current_period_end", OffsetDateTime::class.java),
             r.get("generation_limit", Int::class.java) ?: 0,
             r.get("generations_consumed", Int::class.java) ?: 0,
+            r.get("allowance_start", OffsetDateTime::class.java),
+            r.get("allowance_end", OffsetDateTime::class.java),
         )
     }
     private fun inactive(status: String) = ShopifyEntitlement(null, null, status, null, null, 0, 0)

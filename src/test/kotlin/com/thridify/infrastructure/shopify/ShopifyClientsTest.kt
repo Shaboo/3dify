@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 class ShopifyClientsTest {
     private val mapper = jacksonObjectMapper()
     private val http: ShopifyHttpClient = mockk()
-    private val config = ShopifyProperties(enabled = true, clientId = "client", clientSecret = "secret", appId = "gid://shopify/App/1", appHandle = "thridify", partnerOrgId = "123", partnerAccessToken = "partner-token")
+    private val config = ShopifyProperties(enabled = true, clientId = "client", clientSecret = "secret", appId = "gid://shopify/App/1", appHandle = "thridify", partnerOrgId = "123", partnerAccessToken = "partner-token", partnerRequestIntervalMs = 0)
 
     @Test
     fun `installation uses online token exchange and verifies the returned shop`() {
@@ -62,6 +62,34 @@ class ShopifyClientsTest {
         assertThrows<ApiException> { ShopifyPartnerBillingClient(config, http).currentSubscription("gid://shopify/Shop/7") }
         every { http.post(any(), any(), any()) } returns mapper.readTree("""{"data":{"activeSubscription":{"shop":{"id":"gid://shopify/Shop/99"}}}}""")
         assertThrows<ApiException> { ShopifyPartnerBillingClient(config, http).currentSubscription("gid://shopify/Shop/7") }
+    }
+
+    @Test
+    fun `freeze older than a year is found in earlier explicit history windows`() {
+        val response = mapper.readTree("""{"data":{"activeSubscription":{"shop":{"id":"gid://shopify/Shop/7"},"billingPeriod":"ANNUAL","currentBillingCycle":{"startTime":"2026-01-01T00:00:00Z","endTime":"2027-01-01T00:00:00Z"},"items":[{"handle":"pro"}]},"events":{"edges":[]}}}""")
+        every { http.post(any(), any(), any()) } returnsMany listOf(response, mapper.readTree("""{"data":{"events":{"edges":[{"node":{"eventType":"SUBSCRIPTION_FROZEN"}}]}}}"""))
+        assertEquals("frozen", ShopifyPartnerBillingClient(config, http).currentSubscription("gid://shopify/Shop/7")!!.status)
+        verify(exactly = 2) { http.post(any(), any(), match { it.toString().contains("occurredAtMin") && it.toString().contains("occurredAtMax") }) }
+    }
+
+    @Test
+    fun `malformed lifecycle and billing dates fail closed`() {
+        val response = """{"data":{"activeSubscription":{"shop":{"id":"gid://shopify/Shop/7"},"billingPeriod":"EVERY_30_DAYS","currentBillingCycle":{"startTime":"invalid","endTime":"2026-10-31T00:00:00Z"},"items":[{"handle":"pro"}]},"events":{"edges":[{"node":{"eventType":"SUBSCRIPTION_CREATED"}}]}}}"""
+        every { http.post(any(), any(), any()) } returns mapper.readTree(response)
+        assertEquals(502, assertThrows<ApiException> { ShopifyPartnerBillingClient(config, http).currentSubscription("gid://shopify/Shop/7") }.statusCode)
+        every { http.post(any(), any(), any()) } returns mapper.readTree(response.replace("\"edges\":[{\"node\":{\"eventType\":\"SUBSCRIPTION_CREATED\"}}]", "\"edges\":null"))
+        assertEquals(502, assertThrows<ApiException> { ShopifyPartnerBillingClient(config, http).currentSubscription("gid://shopify/Shop/7") }.statusCode)
+    }
+
+    @Test
+    fun `empty non-object and malformed HTTP responses map to upstream errors`() {
+        val client = ShopifyHttpClient(mapper)
+        for (body in listOf("", "null", "[]", "true", "{broken")) {
+            assertEquals(502, assertThrows<ApiException> { client.parse(body) }.statusCode)
+        }
+        assertEquals(403, assertThrows<ApiException> { client.parse("""{"errors":[{"extensions":{"code":"ACCESS_DENIED"}}]}""") }.statusCode)
+        assertEquals(503, assertThrows<ApiException> { client.parse("""{"errors":[{"extensions":{"code":"THROTTLED"}}]}""") }.statusCode)
+        assertEquals(401, assertThrows<ApiException> { client.parse("""{"errors":[{"extensions":{"code":"UNAUTHENTICATED"}}]}""") }.statusCode)
     }
 
     @Test

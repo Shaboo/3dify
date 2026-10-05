@@ -38,6 +38,16 @@ class GlobalExceptionHandler(private val objectMapper: ObjectMapper) {
         writeError(response, HttpStatus.valueOf(ex.statusCode), ex.message)
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException::class)
+    fun handleUploadLimit(ex: org.springframework.web.multipart.MaxUploadSizeExceededException, response: HttpServletResponse) = writeError(response, HttpStatus.PAYLOAD_TOO_LARGE, "Each image must be up to 20 MB")
+
+    @ExceptionHandler(
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException::class,
+        org.springframework.web.bind.MissingRequestHeaderException::class,
+        org.springframework.web.multipart.support.MissingServletRequestPartException::class,
+    )
+    fun handleMalformedRequest(ex: Exception, response: HttpServletResponse) = writeError(response, HttpStatus.BAD_REQUEST, "Required request fields are missing or invalid")
+
     @ExceptionHandler(Exception::class)
     fun handleGeneric(ex: Exception, response: HttpServletResponse) = writeError(response, HttpStatus.INTERNAL_SERVER_ERROR, ex.message ?: "Unexpected error")
 }

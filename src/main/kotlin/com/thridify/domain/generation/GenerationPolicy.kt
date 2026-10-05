@@ -18,8 +18,9 @@ class GenerationPolicy {
     fun inputKey(filename: String?) = "inputs/${UUID.randomUUID()}_$filename"
     fun matchesTask(actualJobId: UUID?, expectedJobId: UUID) = actualJobId == expectedJobId
     fun callbackOutcome(status: String, hasOutput: Boolean, glb: String?, usdz: String?): GenerationOutcome = when {
-        status == "COMPLETED" && hasOutput -> GenerationOutcome.Succeeded(glb ?: "", usdz ?: "")
-        status == "FAILED" -> GenerationOutcome.Failed("GPU Provider reported failure")
+        status == "COMPLETED" && hasOutput && !glb.isNullOrBlank() && !usdz.isNullOrBlank() -> GenerationOutcome.Succeeded(glb, usdz)
+        status == "COMPLETED" -> GenerationOutcome.Failed("GPU Provider returned incomplete model outputs")
+        status in setOf("FAILED", "TIMED_OUT", "CANCELLED") -> GenerationOutcome.Failed("GPU Provider reported failure")
         else -> GenerationOutcome.InProgress
     }
 }
