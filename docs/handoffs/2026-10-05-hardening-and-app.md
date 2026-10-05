@@ -14,7 +14,7 @@ Backend: `~/Documents/3dify`, namespace `com.thridify`, project spelling **thrid
 
 Merchant app: `~/Documents/3dify-shopify`, remote `git@github.com:Shaboo/3dify-shopify.git`, branch `main`. It is an embedded Vite/TypeScript app with current App Bridge/Polaris web components and online Direct Admin API access. Product selection, staged GLB upload, attachment and merchant UI remain outside the backend. Read its `docs/HANDOFF.md` and README.
 
-Previous pushed backend commits: `3732941` (store-scoped Shopify) and `13386f9` (parallel CI/Testcontainers). This session's backend changes are committed under “Harden Shopify quotas, billing lifecycle and provider integration”. Consult git log for exact hashes and latest push state; final session response records the outcome. The previous session handoff is now included in Git for historical context.
+Previous pushed backend commits: `3732941` (store-scoped Shopify) and `13386f9` (parallel CI/Testcontainers). This session's backend changes are committed and pushed as `b7bcb48` — “Harden Shopify quotas, billing lifecycle and provider integration”. The app implementation is `d732e06`; its final handoff commit `866fe22` is pushed to app `origin/main`. Both working trees were clean after those pushes. A final backend documentation commit records these outcomes. The previous session handoff is now included in Git for historical context.
 
 ## Backend changes
 
@@ -31,7 +31,7 @@ Previous pushed backend commits: `3732941` (store-scoped Shopify) and `13386f9` 
 
 Final `./gradlew spotlessApply build` passed with **140 tests across 31 suites**, zero failures/errors/skips. This includes strict architecture rules and PostgreSQL Testcontainers integration tests. `git diff --check` passed. No architecture exemptions introduced. Tests use Docker; external Shopify, storage and generation providers are mocked. Production RunPod adapter tested using Spring mock HTTP requests. Previous CI is working per user; no remote CI inspection done this session.
 
-App validation is recorded in its handoff: unit/contract tests, TypeScript/Vite production build and a mocked Chromium merchant flow. Root integration review found and corrected canonical backend job statuses: backend emits **SUCCESS**, while RunPod callbacks use COMPLETED. Mock browser fixtures must use backend SUCCESS. Upload limits were aligned with app. The app refreshes Shopify ID tokens, preserves the generation UUID/files on retry, and checks product media before attachment retries. Concurrent product attachments across tabs remain best effort (no atomic Shopify-side application marker). App review also includes the distinction between monthly allowance renewal and provider billing end.
+App validation passed: 8 boundary/contract tests, TypeScript/Vite production build and a mocked Chromium merchant flow through media READY. Media processing is polled sequentially for up to 55 seconds; longer processing can be rechecked, and FAILED explains recovery through Shopify. Details are recorded in its handoff. Root integration review found and corrected canonical backend job statuses: backend emits **SUCCESS**, while RunPod callbacks use COMPLETED. Mock browser fixtures must use backend SUCCESS. Upload limits were aligned with app. The app refreshes Shopify ID tokens, preserves the generation UUID/files on retry, and checks product media before attachment retries. Concurrent product attachments across tabs remain best effort (no atomic Shopify-side application marker). App review also includes the distinction between monthly allowance renewal and provider billing end.
 
 ## Live setup still required
 
@@ -43,4 +43,4 @@ Configure the same Shopify app identity in both repos, real hosted offers and Pa
 
 Broader workspace/WooCommerce roadmap is explicitly deferred. Historical direct-user/Stripe dispatch/callback deduplication and transaction/compensation findings in the DSA migration plan remain separately scoped; this session does not claim those general flows are fully redesigned. Repeated provider callbacks can still repeat metrics/history/customer delivery in the pre-existing general callback use case. Real-provider dispatch acknowledgment versus callback ordering must be validated against the worker; no generic provider outbox/compensation redesign was added.
 
-There should be no active implementation work at handoff. Check `git status` in both repos and the final session response for confirmed pushes before resuming.
+Implementation is complete for the agreed code scope; no agents/work are running at handoff. Both repos are pushed on `main`. Live credentials/worker/hosting validation remains pending as detailed above. Check `git status` in both repos before resuming.
