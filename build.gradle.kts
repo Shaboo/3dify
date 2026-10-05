@@ -73,6 +73,7 @@ dependencies {
     // --- Kotlin ---
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
+    runtimeOnly("com.twelvemonkeys.imageio:imageio-webp:3.14.0")
 
     // --- Database ---
     implementation("org.postgresql:postgresql")

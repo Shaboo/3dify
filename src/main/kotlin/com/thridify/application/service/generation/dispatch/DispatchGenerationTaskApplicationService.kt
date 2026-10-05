@@ -1,45 +1,66 @@
 package com.thridify.application.service.generation.dispatch
 
-import com.thridify.domain.generation.GenerationProviderClient
+import com.thridify.domain.generation.GenerationProviderException
+import com.thridify.domain.generation.GenerationProviderRegistry
+import com.thridify.domain.generation.GenerationProviderTaskRepository
 import com.thridify.domain.job.JobHistoryRepository
 import com.thridify.domain.job.JobRepository
+import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.shared.metrics.AppMetrics
 import org.slf4j.LoggerFactory
-import org.slf4j.MDC
 import org.springframework.stereotype.Service
 
 @Service
 class DispatchGenerationTaskApplicationService(
     private val jobs: JobRepository,
     private val history: JobHistoryRepository,
-    private val provider: GenerationProviderClient,
+    private val providers: GenerationProviderRegistry,
+    private val tasks: GenerationProviderTaskRepository,
+    private val transactions: TransactionProvider,
     private val metrics: AppMetrics,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: DispatchGenerationTaskCommand) {
         val id = command.jobId
-        MDC.put("jobId", id.toString())
-        try {
-            try {
+        val provider = providers.current()
+        val reserved = transactions.transaction {
+            if (!tasks.reserve(id, provider.name)) {
+                false
+            } else {
                 jobs.updateStatus(id, "PROCESSING")
                 history.insert(id, "PROCESSING", "Worker picked up job")
-                val taskId = provider.startGeneration(id, command.imageKey1, command.imageKey2)
-                jobs.updateExternalTaskId(id, taskId)
-                history.insert(id, "PROCESSING", "Job dispatched to GPU with ID: $taskId")
-                metrics.jobsDispatched.increment()
-                log.info("Job {} dispatched successfully to provider as task {}", id, taskId)
-            } catch (ex: Exception) {
-                log.error("Failed to dispatch job {} to provider: {}", id, ex.message, ex)
-                val job = jobs.findById(id)
-                // Keep the existing literal failure text until separately approved as a bug fix.
-                val message = "GPU Provider Error: \${ex.message}"
-                jobs.markFailed(id, message)
-                history.insert(id, "FAILED", message)
-                metrics.jobsFailed.increment()
-                job?.let { metrics.recordJobDuration(System.currentTimeMillis() - it.createdAt.toInstant().toEpochMilli()) }
+                true
             }
-        } finally {
-            MDC.remove("jobId")
         }
+        if (!reserved) return
+        val taskId = try {
+            // External mutation happens after reservation commits, never in a DB transaction.
+            provider.startGeneration(id, command.imageKey1, command.imageKey2)
+        } catch (ex: Exception) {
+            if (ex is GenerationProviderException && !ex.ambiguous && ex.retryable) {
+                transactions.transaction { tasks.retrySubmission(id, ex.retryAfterSeconds) }
+                return
+            }
+            transactions.transaction {
+                tasks.submissionFailed(id, (ex as? GenerationProviderException)?.ambiguous != false)
+                jobs.markFailed(id, "Generation provider could not accept the task")
+                history.insert(id, "FAILED", "Generation provider could not accept the task")
+            }
+            metrics.jobsFailed.increment()
+            return
+        }
+        // A DB failure here leaves a submitting reservation for manual reconciliation.
+        // Re-delivery cannot issue another charged upstream POST.
+        try {
+            transactions.transaction {
+                jobs.updateExternalTaskId(id, "${provider.name}:$taskId")
+                tasks.acknowledge(id, taskId)
+                history.insert(id, "PROCESSING", "Job dispatched to generation provider")
+            }
+        } catch (ex: Exception) {
+            log.error("Provider {} acknowledged task {} for job {}; submission requires reconciliation", provider.name, taskId, id)
+            throw ex
+        }
+        metrics.jobsDispatched.increment()
     }
 }

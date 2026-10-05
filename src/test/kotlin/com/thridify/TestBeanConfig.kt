@@ -1,6 +1,7 @@
 package com.thridify
 
 import com.thridify.infrastructure.provider.runpod.RunPodClient
+import io.mockk.every
 import io.mockk.mockk
 import org.springframework.amqp.rabbit.core.RabbitTemplate
 import org.springframework.boot.test.context.TestConfiguration
@@ -34,5 +35,5 @@ class TestBeanConfig {
     /** Replace the RunPodClient with a MockK mock to avoid API calls and config issues. */
     @Bean
     @Primary
-    fun runPodClient(): RunPodClient = mockk(relaxed = true)
+    fun runPodClient(): RunPodClient = mockk<RunPodClient>(relaxed = true).also { every { it.name } returns "runpod" }
 }

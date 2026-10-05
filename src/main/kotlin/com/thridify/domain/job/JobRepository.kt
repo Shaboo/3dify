@@ -9,6 +9,7 @@ interface JobRepository {
     fun markSuccess(jobId: UUID, glbUrl: String, usdzUrl: String): Unit
     fun markFailed(jobId: UUID, errorMessage: String): Unit
     fun updateExternalTaskId(jobId: UUID, externalTaskId: String): Unit
+    fun lock(jobId: UUID): JobEntity?
     fun findById(jobId: UUID): JobEntity?
     fun findByExternalTaskId(externalTaskId: String): JobEntity?
     fun findAllByApiKeyId(apiKeyId: UUID): List<JobEntity>

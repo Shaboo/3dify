@@ -1,5 +1,7 @@
 package com.thridify.infrastructure.provider.runpod
 
+import com.thridify.domain.generation.GenerationProviderException
+import com.thridify.domain.generation.GenerationProviderResult
 import com.thridify.shared.metrics.AppMetrics
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Test
@@ -35,13 +37,13 @@ class RunPodClientTest {
 
     @Test
     fun `malformed provider acknowledgments do not count as successful dispatch`() {
-        for (body in listOf("{}", "{\"id\":\"\",\"status\":\"IN_QUEUE\"}", "{\"id\":\"task\",\"status\":\"FAILED\"}")) {
+        for (body in listOf("{}", "{\"id\":\"\",\"status\":\"IN_QUEUE\"}", "{\"id\":\"task\",\"status\":\"UNKNOWN\"}")) {
             val metrics = AppMetrics(SimpleMeterRegistry())
             val builder = RestClient.builder()
             val server = MockRestServiceServer.bindTo(builder).build()
             val client = RunPodClient("https://api.runpod.ai/v2/endpoint/run", "secret", "https://backend.example/internal/webhooks/runpod", metrics, true, builder.build())
             server.expect(requestTo("https://api.runpod.ai/v2/endpoint/run")).andRespond(withSuccess(body, MediaType.APPLICATION_JSON))
-            assertThrows<IllegalStateException> { client.startGeneration(UUID.randomUUID(), "one", "two") }
+            assertThrows<GenerationProviderException> { client.startGeneration(UUID.randomUUID(), "one", "two") }
             assertEquals(0.0, metrics.runpodDispatched.count())
             assertEquals(1.0, metrics.runpodDispatchErrors.count())
             server.verify()
@@ -49,10 +51,25 @@ class RunPodClientTest {
     }
 
     @Test
+    fun `RunPod retrieval participates in provider-neutral completion and expired privacy cleanup`() {
+        val metrics = AppMetrics(SimpleMeterRegistry())
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val client = RunPodClient("https://api.runpod.ai/v2/endpoint/run", "secret", "https://backend.example/internal/webhooks/runpod", metrics, true, builder.build())
+        server.expect(requestTo("https://api.runpod.ai/v2/endpoint/status/task"))
+            .andRespond(withSuccess("""{"id":"task","status":"COMPLETED","output":{"glb":"https://assets/model.glb","usdz":"https://assets/model.usdz"}}""", MediaType.APPLICATION_JSON))
+        server.expect(requestTo("https://api.runpod.ai/v2/endpoint/status/expired"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withStatus(org.springframework.http.HttpStatus.NOT_FOUND))
+        assertEquals(GenerationProviderResult.Succeeded("https://assets/model.glb", "https://assets/model.usdz"), client.retrieveTask("task"))
+        client.deleteTask("expired")
+        server.verify()
+    }
+
+    @Test
     fun `disabled generation fails without inventing a task`() {
         val metrics = AppMetrics(SimpleMeterRegistry())
         val client = RunPodClient("", "", "", metrics)
-        assertThrows<IllegalStateException> { client.startGeneration(UUID.randomUUID(), "one", "two") }
+        assertThrows<GenerationProviderException> { client.startGeneration(UUID.randomUUID(), "one", "two") }
         assertEquals(0.0, metrics.runpodDispatched.count())
         assertEquals(1.0, metrics.runpodDispatchErrors.count())
     }

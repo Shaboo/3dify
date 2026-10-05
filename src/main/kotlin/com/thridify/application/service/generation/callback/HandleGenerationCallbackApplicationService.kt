@@ -3,9 +3,11 @@ package com.thridify.application.service.generation.callback
 import com.thridify.domain.generation.CustomerWebhookClient
 import com.thridify.domain.generation.GenerationOutcome
 import com.thridify.domain.generation.GenerationPolicy
+import com.thridify.domain.generation.GenerationProviderTaskRepository
 import com.thridify.domain.generation.JobNotification
 import com.thridify.domain.job.JobHistoryRepository
 import com.thridify.domain.job.JobRepository
+import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.domain.webhook.WebhookRepository
 import com.thridify.shared.metrics.AppMetrics
 import org.slf4j.LoggerFactory
@@ -20,37 +22,55 @@ class HandleGenerationCallbackApplicationService(
     private val client: CustomerWebhookClient,
     private val policy: GenerationPolicy,
     private val metrics: AppMetrics,
+    private val tasks: GenerationProviderTaskRepository,
+    private val transactions: TransactionProvider,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: HandleGenerationCallbackCommand): GenerationCallbackResult {
         val id = command.jobId
         MDC.put("jobId", id.toString())
         try {
-            if (!policy.matchesTask(jobs.findByExternalTaskId(command.externalTaskId)?.id, id)) return GenerationCallbackResult.TASK_MISMATCH
-            when (val outcome = policy.callbackOutcome(command.status, command.hasOutput, command.glbUrl, command.usdzUrl)) {
-                is GenerationOutcome.Succeeded -> {
-                    val job = jobs.findById(id)
-                    jobs.markSuccess(id, outcome.glbUrl, outcome.usdzUrl)
-                    history.insert(id, "SUCCESS", "GLB: ${outcome.glbUrl} | USDZ: ${outcome.usdzUrl}")
+            var notification: JobNotification? = null
+            var completedJob: com.thridify.domain.job.JobEntity? = null
+            val accepted = transactions.transaction {
+                val writable = tasks.canComplete(id)
+                val job = jobs.lock(id) ?: return@transaction false
+                val binding = tasks.lock(id)
+                if (binding != null && binding.provider != "runpod") return@transaction false
+                if (job.externalTaskId !in setOf(command.externalTaskId, "runpod:${command.externalTaskId}")) return@transaction false
+                if (!writable) return@transaction true
+                when (val outcome = policy.callbackOutcome(command.status, command.hasOutput, command.glbUrl, command.usdzUrl)) {
+                    is GenerationOutcome.Succeeded -> {
+                        jobs.markSuccess(id, outcome.glbUrl, outcome.usdzUrl)
+                        history.insert(id, "SUCCESS", "GLB: ${outcome.glbUrl} | USDZ: ${outcome.usdzUrl}")
+                        tasks.complete(id)
+                        completedJob = job
+                        notification = JobNotification(id, "SUCCESS", outcome.glbUrl, outcome.usdzUrl)
+                    }
+
+                    is GenerationOutcome.Failed -> {
+                        jobs.markFailed(id, outcome.message)
+                        history.insert(id, "FAILED", outcome.message)
+                        tasks.complete(id)
+                        completedJob = job
+                        notification = JobNotification(id, "FAILED", null, null)
+                    }
+
+                    GenerationOutcome.InProgress -> Unit
+                }
+                true
+            }
+            if (!accepted) return GenerationCallbackResult.TASK_MISMATCH
+            notification?.let {
+                if (it.status == "SUCCESS") {
                     metrics.jobsCompleted.increment()
-                    job?.let { metrics.recordJobDuration(System.currentTimeMillis() - it.createdAt.toInstant().toEpochMilli()) }
                     metrics.runpodCallbacks.increment()
-                    log.info("Job {} completed via RunPod callback", id)
-                    notifyCustomer(JobNotification(id, "SUCCESS", outcome.glbUrl, outcome.usdzUrl))
-                }
-
-                is GenerationOutcome.Failed -> {
-                    val job = jobs.findById(id)
-                    jobs.markFailed(id, outcome.message)
-                    history.insert(id, "FAILED", outcome.message)
+                } else {
                     metrics.jobsFailed.increment()
-                    job?.let { metrics.recordJobDuration(System.currentTimeMillis() - it.createdAt.toInstant().toEpochMilli()) }
                     metrics.runpodCallbacksFailed.increment()
-                    log.warn("Job {} failed via RunPod callback", id)
-                    notifyCustomer(JobNotification(id, "FAILED", null, null))
                 }
-
-                GenerationOutcome.InProgress -> log.info("Job {} in-progress state received [status={}]", id, command.status)
+                completedJob?.let { job -> metrics.recordJobDuration(System.currentTimeMillis() - job.createdAt.toInstant().toEpochMilli()) }
+                notifyCustomer(it)
             }
             return GenerationCallbackResult.ACCEPTED
         } finally {

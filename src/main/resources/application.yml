@@ -123,3 +123,17 @@ shopify:
   reconciliation-delay-ms: 60000
   privacy-delay-ms: 60000
   frontend-origins: ${SHOPIFY_FRONTEND_ORIGINS:}
+
+# Provider selection affects only new jobs; persisted tasks retain their original provider.
+generation:
+  provider: ${GENERATION_PROVIDER:meshy}
+  polling-enabled: ${GENERATION_POLLING_ENABLED:false}
+  polling-delay-ms: 15000
+  asset-hosts:
+    meshy:
+      - assets.meshy.ai
+  meshy:
+    enabled: ${MESHY_ENABLED:false}
+    api-key: ${MESHY_API_KEY:}
+    ai-model: ${MESHY_AI_MODEL:meshy-7.1}
+    request-interval-ms: 500

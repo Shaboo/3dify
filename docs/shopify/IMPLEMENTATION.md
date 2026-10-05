@@ -1,5 +1,8 @@
 # Shopify backend implementation
 
+Current generation implementation: [Meshy and interchangeable providers](../generation/PROVIDERS.md). V3 adds durable provider task tracking; the public two-image flow uses Meshy Multi-Image-to-3D, polling and owned GLB/USDZ retention. Historical RunPod descriptions below apply to the optional worker adapter.
+
+
 Scope: this repository remains a Kotlin/Spring backend. The Shopify-facing frontend, App Bridge setup, Polaris UI and Shopify CLI app configuration live in [3dify-shopify](https://github.com/Shaboo/3dify-shopify). No merchant UI is added here.
 
 The first merchant workflow generates a 3D model from two images. Product selection and attachment are handled by the separate Shopify app using completed model outputs from this backend. Shopify App Pricing owns merchant plan selection. The separate frontend sends Shopify ID tokens to backend APIs and navigates merchants to hosted pricing.

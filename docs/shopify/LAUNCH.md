@@ -12,7 +12,11 @@ Map real pricing handles into `plan_offers` with `provider = 'shopify'`, the cor
 
 Partner lifecycle state is read over explicit windows of at most 365 days, searching backward until a creation/cancellation/freeze/unfreeze event is found. A current-year empty window does not clear older frozen status. Long quiet subscriptions can require several rate-limited queries; validate actual provider history availability and permissions in the development store.
 
-## RunPod worker and R2
+## Meshy and owned output storage
+
+Meshy is the default; follow [generation provider setup](../generation/PROVIDERS.md) to enable credentials and polling. Existing two-image requests use Multi-Image-to-3D. No owned inference worker is needed. Configure R2 below for private inputs and durable output copies. Keep provider credentials available for pending tasks and privacy deletion.
+
+## Optional future RunPod worker and R2
 
 Set `RUNPOD_ENABLED=true`, `RUNPOD_API_URL=https://api.runpod.ai/v2/<endpoint>/run`, `RUNPOD_API_KEY` and `RUNPOD_WEBHOOK_URL=https://<backend>/internal/webhooks/runpod`. Requests include `input.jobId`, `input.image1`, `input.image2`, and `input.outputPrefix = outputs/<jobId>/`, plus the callback URL including job ID. Inputs are R2 object keys, not public input image URLs. Provision a worker that reads the private configured bucket using worker-side credentials, runs the selected image-to-3D model and writes both formats under that output prefix. The inference model/container is not provisioned by this repository.
 
@@ -26,7 +30,7 @@ RunPod async result metadata expires independently from durable bucket outputs. 
 
 1. Configure one development app/store with actual offer mappings, backend/app URLs, direct Admin API product permissions and webhook destinations.
 2. Open the embedded app and verify installation, token refresh/retry, hosted plan selection and authoritative subscription/quota display.
-3. Generate one real GLB/USDZ pair; verify worker access to inputs, callback association and output CORS/download.
+3. Generate one real GLB/USDZ pair; verify private input submission, polling completion, retained outputs and output CORS/download.
 4. Select a product, attach the GLB and wait for Shopify media processing; view the product model. Repeat with the app's retry behavior.
 5. Exercise frozen/unfrozen, cancel, uninstall/reinstall and privacy cleanup; check another store stays unaffected and confirm output object removal.
 6. Revalidate monthly annual allowance boundaries and actual provider history permissions. Deploy only after these checks pass.

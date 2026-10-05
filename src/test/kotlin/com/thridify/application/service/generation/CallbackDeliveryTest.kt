@@ -5,10 +5,12 @@ import com.thridify.application.service.generation.callback.HandleGenerationCall
 import com.thridify.application.service.generation.callback.HandleGenerationCallbackCommand
 import com.thridify.domain.generation.CustomerWebhookClient
 import com.thridify.domain.generation.GenerationPolicy
+import com.thridify.domain.generation.GenerationProviderTaskRepository
 import com.thridify.domain.generation.JobNotification
 import com.thridify.domain.job.JobEntity
 import com.thridify.domain.job.JobHistoryRepository
 import com.thridify.domain.job.JobRepository
+import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.domain.webhook.WebhookEntity
 import com.thridify.domain.webhook.WebhookRepository
 import com.thridify.shared.metrics.AppMetrics
@@ -29,14 +31,21 @@ class CallbackDeliveryTest {
     private val webhooks: WebhookRepository = mockk()
     private val client: CustomerWebhookClient = mockk()
     private val metrics = AppMetrics(SimpleMeterRegistry())
-    private val service = HandleGenerationCallbackApplicationService(jobs, history, webhooks, client, GenerationPolicy(), metrics)
+    private val tasks: GenerationProviderTaskRepository = mockk(relaxed = true)
+    private val transactions: TransactionProvider = mockk()
+    init {
+        every { tasks.canComplete(any()) } returns true
+        every { tasks.lock(any()) } returns null
+        every { transactions.transaction(any<() -> Any>()) } answers { firstArg<() -> Any>().invoke() }
+    }
+    private val service = HandleGenerationCallbackApplicationService(jobs, history, webhooks, client, GenerationPolicy(), metrics, tasks, transactions)
     private val id = UUID.randomUUID()
     private val user = UUID.randomUUID()
     private val job = JobEntity(id, UUID.randomUUID(), "PROCESSING", "task", "one", "two", null, null, null, null, OffsetDateTime.now(), null)
 
     @Test
     fun `customer delivery failure is swallowed after recording successful output`() {
-        every { jobs.findByExternalTaskId("task") } returns job
+        every { jobs.lock(id) } returns job
         every { jobs.findById(id) } returns job
         every { jobs.findUserIdByJobId(id) } returns user
         every { webhooks.findByUserId(user) } returns WebhookEntity(UUID.randomUUID(), user, "https://customer/callback", OffsetDateTime.now(), null)
@@ -54,7 +63,7 @@ class CallbackDeliveryTest {
 
     @Test
     fun `mismatched tasks have no writes or customer notifications`() {
-        every { jobs.findByExternalTaskId("different") } returns null
+        every { jobs.lock(id) } returns null
         assertEquals(
             GenerationCallbackResult.TASK_MISMATCH,
             service.execute(HandleGenerationCallbackCommand(id, "different", "COMPLETED", true, "glb", "usdz")),
@@ -67,7 +76,7 @@ class CallbackDeliveryTest {
 
     @Test
     fun `completed callback without an output object fails the job`() {
-        every { jobs.findByExternalTaskId("task") } returns job
+        every { jobs.lock(id) } returns job
         every { jobs.findUserIdByJobId(id) } returns null
         assertEquals(
             GenerationCallbackResult.ACCEPTED,

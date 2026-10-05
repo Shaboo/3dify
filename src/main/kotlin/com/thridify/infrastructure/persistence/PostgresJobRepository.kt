@@ -101,6 +101,8 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
             .execute()
     }
 
+    override fun lock(jobId: UUID): JobEntity? = dsl.select(*JOB_COLS).from(TABLE).where(J_ID.eq(jobId)).forUpdate().fetchOne()?.let(::toEntity)
+
     override fun findById(jobId: UUID): JobEntity? = dsl.select(*JOB_COLS).from(TABLE).where(J_ID.eq(jobId)).fetchOne()?.let(::toEntity)
 
     override fun findByExternalTaskId(externalTaskId: String): JobEntity? = dsl.select(*JOB_COLS).from(TABLE).where(J_EXTERNAL_TASK_ID.eq(externalTaskId)).fetchOne()?.let(::toEntity)

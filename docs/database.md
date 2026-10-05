@@ -1,5 +1,8 @@
 # Database baseline
 
+Current generation implementation: [Meshy and interchangeable providers](generation/PROVIDERS.md). V3 adds durable provider task tracking; the public two-image flow uses Meshy Multi-Image-to-3D, polling and owned GLB/USDZ retention. Historical RunPod descriptions below apply to the optional worker adapter.
+
+
 The development database starts from [`V1__initial_schema.sql`](../src/main/resources/db/migration/V1__initial_schema.sql). The old V1–V12 history has been removed because the project is not deployed. This is a fresh schema, not an upgrade migration.
 
 The design is defined in [ADR 0001](adr/0001-workspaces-and-store-scoped-billing.md). Workspace ownership and billing scope are deliberately separate. One workspace can contain two Shopify stores with independent subscriptions and allowances, plus a direct API billing scope.

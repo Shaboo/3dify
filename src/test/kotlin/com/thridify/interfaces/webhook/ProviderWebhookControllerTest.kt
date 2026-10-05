@@ -60,7 +60,7 @@ class ProviderWebhookControllerTest : IntegrationTestBase() {
 
         // Give it an external task ID (simulate what TaskWorker does in the real flow)
         val externalTaskId = "runpod-12345"
-        jobRepository.updateExternalTaskId(jobId, externalTaskId)
+        jobRepository.updateExternalTaskId(jobId, "runpod:$externalTaskId")
 
         // Act: Send the webhook from the mock provider
         val payload = ProviderWebhookController.RunPodWebhookPayload(
@@ -77,6 +77,11 @@ class ProviderWebhookControllerTest : IntegrationTestBase() {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payload)),
         ).andExpect(status().isOk)
+
+        // A repeated provider webhook must not repeat state transitions or notifications.
+        mockMvc.perform(post("/internal/webhooks/runpod/$jobId").contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(payload)))
+            .andExpect(status().isOk)
+        kotlin.test.assertEquals(1, dsl.fetchOne("SELECT count(*) AS total FROM job_history WHERE job_id = ? AND status = 'SUCCESS'", jobId)!!.get("total", Int::class.java))
 
         // Assert: Job is updated
         val updatedJob = jobRepository.findById(jobId)!!
@@ -98,7 +103,7 @@ class ProviderWebhookControllerTest : IntegrationTestBase() {
         val jobId = seedJob(apiKeyId)
         jobRepository.updateStatus(jobId, "PROCESSING")
         val externalTaskId = "runpod-fail-99"
-        jobRepository.updateExternalTaskId(jobId, externalTaskId)
+        jobRepository.updateExternalTaskId(jobId, "runpod:$externalTaskId")
 
         val payload = ProviderWebhookController.RunPodWebhookPayload(
             id = externalTaskId,

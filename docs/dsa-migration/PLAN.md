@@ -1,5 +1,8 @@
 # DSA migration plan
 
+Current generation implementation: [Meshy and interchangeable providers](../generation/PROVIDERS.md). V3 adds durable provider task tracking; the public two-image flow uses Meshy Multi-Image-to-3D, polling and owned GLB/USDZ retention. Historical RunPod descriptions below apply to the optional worker adapter.
+
+
 ## Metadata
 
 - Date: 2026-10-04

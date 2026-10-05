@@ -3,6 +3,9 @@ package com.thridify.interfaces.shopify
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.thridify.IntegrationTestBase
 import com.thridify.application.service.shopify.redact.RedactShopifyDataApplicationService
+import com.thridify.domain.generation.GenerationOutputStorage
+import com.thridify.domain.generation.GenerationProviderClient
+import com.thridify.domain.generation.GenerationProviderRegistry
 import com.thridify.domain.generation.ImageStorage
 import com.thridify.domain.shopify.ShopifyAdminClient
 import com.thridify.domain.shopify.ShopifyAssetDeletionClient
@@ -53,6 +56,10 @@ class ShopifyBackendTest : IntegrationTestBase() {
 
     @Autowired private lateinit var deletion: ShopifyAssetDeletionClient
 
+    @Autowired private lateinit var providers: GenerationProviderRegistry
+
+    @Autowired private lateinit var retainedOutputs: GenerationOutputStorage
+
     @Autowired private lateinit var redact: RedactShopifyDataApplicationService
     private val secret = "0123456789abcdef0123456789abcdef"
     private val start = OffsetDateTime.now().minusDays(1)
@@ -71,13 +78,19 @@ class ShopifyBackendTest : IntegrationTestBase() {
 
         @Bean @Primary
         fun deletion(): ShopifyAssetDeletionClient = mockk()
+
+        @Bean @Primary
+        fun providers(): GenerationProviderRegistry = mockk()
+
+        @Bean @Primary
+        fun outputs(): GenerationOutputStorage = mockk(relaxed = true)
     }
 
     @BeforeEach
     fun setup() {
         resetDatabase()
         seedDefaultPlans()
-        clearMocks(admin, billing, storage, deletion)
+        clearMocks(admin, billing, storage, deletion, providers, retainedOutputs)
         dsl.execute("UPDATE plans SET monthly_quota = 2 WHERE name = 'pro'")
         dsl.execute("INSERT INTO plan_offers (plan_id, provider, external_offer_id) SELECT id, 'shopify', 'pro' FROM plans WHERE name = 'pro'")
         every { admin.shop(any(), any()) } answers {
@@ -318,6 +331,28 @@ class ShopifyBackendTest : IntegrationTestBase() {
         redact.execute()
         assertEquals(0, count("jobs"))
         verify(exactly = 2) { deletion.deleteOutput(output) }
+    }
+
+    @Test
+    fun `privacy cleanup removes Meshy task and waits for in-progress conflicts`() {
+        connect()
+        val result = generate().andExpect(status().isAccepted).andReturn()
+        val id = UUID.fromString(mapper.readTree(result.response.contentAsString).path("jobId").asText())
+        val meshy = mockk<GenerationProviderClient>()
+        every { providers.named("meshy") } returns meshy
+        every { meshy.deleteTask("multi-image-to-3d:task") } throws IllegalStateException("provider still processing")
+        dsl.execute("INSERT INTO generation_provider_tasks(job_id, provider, task_id, state) VALUES (?, 'meshy', 'multi-image-to-3d:task', 'submitted')", id)
+        webhook("app/uninstalled")
+        webhook("shop/redact")
+        redact.execute()
+        assertEquals(1, count("jobs"))
+        every { meshy.deleteTask(any()) } just Runs
+        every { retainedOutputs.delete(any()) } just Runs
+        redact.execute()
+        assertEquals(0, count("jobs"))
+        assertEquals(0, count("generation_provider_tasks"))
+        verify(exactly = 2) { meshy.deleteTask("multi-image-to-3d:task") }
+        verify(exactly = 1) { retainedOutputs.delete(id) }
     }
 
     @Test

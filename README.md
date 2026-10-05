@@ -1,10 +1,11 @@
 # thridify
 
-Kotlin/Spring backend for image-to-3D generation, API-key access, dashboard authentication, Stripe subscriptions, and asynchronous GPU jobs.
+Kotlin/Spring backend for image-to-3D generation, API-key access, dashboard authentication, Stripe subscriptions, and asynchronous 3D generation jobs.
 
 The code namespace is `com.thridify`. The backend follows DSA with one application service per use case, pure domain policies and ports, infrastructure adapters, and thin protocol entry points.
 
 - [Latest session handoff](docs/handoffs/README.md)
+- [Generation providers and Meshy setup](docs/generation/PROVIDERS.md)
 - [Architecture](architecture.md)
 - [System flows and endpoint map](system_flow.md)
 - [DSA migration plan and findings](docs/dsa-migration/PLAN.md)
@@ -44,6 +45,6 @@ Gradle migrations, jOOQ generation, and the application use the Compose database
 
 Spotless checks run as part of `check` and `build`. All ktlint rules, including package naming, are enforced.
 
-Local runtime settings are in `src/main/resources/application.yml`; infrastructure definitions are in `docker-compose.yml` and `rabbitmq/`. The RunPod adapter makes real asynchronous dispatch requests when explicitly enabled; it is disabled until credentials, a worker and public callbacks are configured. See the [Shopify launch runbook](docs/shopify/LAUNCH.md).
+Local runtime settings are in `src/main/resources/application.yml`; infrastructure definitions are in `docker-compose.yml` and `rabbitmq/`. Meshy is the default generation adapter; enable its credentials and generation polling explicitly. Two-image jobs use Multi-Image-to-3D and retain both output formats in owned storage. RunPod remains an interchangeable alternative for a future owned worker. See the [Shopify launch runbook](docs/shopify/LAUNCH.md).
 
 GitHub Actions CI runs on pushes to `main`, pull requests and manual dispatch. Two independent jobs run in parallel: one checks formatting with `spotlessCheck`, builds the application JAR and runs `unitTest` (including architecture checks); the other runs `integrationTest` using Docker/Testcontainers. The suites use complementary JUnit tags, so tests are not duplicated. Both jobs publish test reports, including on failure; the build job also publishes the application JAR. Local `make test` and `make build` continue to run the complete suite.
