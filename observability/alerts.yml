@@ -1,0 +1,52 @@
+groups:
+  - name: omni3d-application
+    rules:
+      - alert: Omni3dScrapeUnavailable
+        expr: up{job="omni3d-spring-boot"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Application metrics scrape is failing
+      - alert: Omni3dApplicationErrors
+        expr: sum by (application, environment, operation) (increase(omni3d_operations_duration_seconds_count{layer="application", outcome="error"}[10m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Application use case has repeated errors
+      - alert: Omni3dWorkflowFailures
+        expr: sum by (application, environment, workflow) (increase(omni3d_workflow_items_total{outcome=~"failed|uncertain"}[15m])) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Background workflow has repeated item failures
+      - alert: Omni3dOutboxStalled
+        expr: omni3d_backlog_oldest_age_seconds{queue="outbox"} > 120
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Outbox delivery is falling behind
+      - alert: Omni3dGenerationNeedsInvestigation
+        expr: omni3d_backlog_items{queue="generation_uncertain"} > 0 or omni3d_backlog_oldest_age_seconds{queue="generation_submitting"} > 300
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Provider submission requires investigation before resubmission
+      - alert: Omni3dPrivacyBacklog
+        expr: omni3d_backlog_oldest_age_seconds{queue="shopify_privacy"} > 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Shopify privacy cleanup is falling behind
+      - alert: Omni3dBacklogSamplingStale
+        expr: time() - omni3d_backlog_last_success_seconds > 120 or increase(omni3d_backlog_sample_failures_total[5m]) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Backlog monitoring cannot refresh database state
