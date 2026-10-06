@@ -16,6 +16,7 @@ import java.util.UUID
 @Component
 class MeshyClient(private val config: MeshyProperties, private val inputs: MeshyInputImages, http: RestClient? = null) : GenerationProviderClient {
     override val name = "meshy"
+    override val maxInputImages = 4
     private val mapper = jacksonObjectMapper()
     private val client = http ?: RestClient.builder().requestFactory(
         org.springframework.http.client.JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()).apply { setReadTimeout(Duration.ofSeconds(30)) },
@@ -23,11 +24,13 @@ class MeshyClient(private val config: MeshyProperties, private val inputs: Meshy
     private var nextRequestNanos = 0L
     private var providerBlockedUntilNanos = 0L
 
-    override fun startGeneration(jobId: UUID, inputImage1: String, inputImage2: String?): String {
+    override fun startGeneration(jobId: UUID, inputImage1: String, inputImage2: String?): String = startGeneration(jobId, listOfNotNull(inputImage1, inputImage2?.takeIf { it.isNotBlank() }))
+    override fun startGeneration(jobId: UUID, inputImages: List<String>): String {
+        validateInputImages(inputImages.size)
         configured()
         // Conversion stays in the provider adapter: callers can continue uploading WebP.
         val images = try {
-            listOfNotNull(inputImage1, inputImage2?.takeIf { it.isNotBlank() }).map(inputs::dataUri)
+            inputImages.map(inputs::dataUri)
         } catch (_: Exception) {
             throw GenerationProviderException(false, "Generation input could not be prepared")
         }

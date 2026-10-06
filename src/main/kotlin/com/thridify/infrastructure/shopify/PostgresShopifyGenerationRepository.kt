@@ -12,13 +12,15 @@ import java.util.UUID
 @Repository
 class PostgresShopifyGenerationRepository(private val dsl: DSLContext, private val jobs: JobRepository) : ShopifyGenerationRepository {
     override fun lock(store: ShopifyStore) {
-        val connection = dsl.fetchOne("SELECT status FROM platform_connections WHERE id = ? FOR UPDATE", store.connectionId)
-        if (connection?.get("status", String::class.java) != "connected") throw ApiException(403, "The Shopify app is disconnected")
+        val connection = dsl.fetchOne("SELECT status, installed_at FROM platform_connections WHERE id = ? FOR UPDATE", store.connectionId)
+        if (connection?.get("status", String::class.java) != "connected" || connection.get("installed_at", java.time.OffsetDateTime::class.java)?.toInstant() != store.installedAt.toInstant()) throw ApiException(403, "The Shopify app is disconnected")
     }
 
     override fun findRequest(scopeId: UUID, requestId: UUID): JobEntity? = dsl.fetchOne("SELECT id FROM jobs WHERE billing_scope_id = ? AND idempotency_key = ?", scopeId, requestId)?.get("id", UUID::class.java)?.let(jobs::findById)
 
-    override fun insert(store: ShopifyStore, requestId: UUID, jobId: UUID, image1: String, image2: String): JobEntity {
+    override fun insert(store: ShopifyStore, requestId: UUID, jobId: UUID, image1: String, image2: String): JobEntity = insert(store, requestId, jobId, listOf(image1, image2))
+
+    override fun insert(store: ShopifyStore, requestId: UUID, jobId: UUID, imageKeys: List<String>): JobEntity {
         lock(store)
         findRequest(store.billingScopeId, requestId)?.let { return it }
         val consumed = dsl.fetchOne(
@@ -35,7 +37,7 @@ class PostgresShopifyGenerationRepository(private val dsl: DSLContext, private v
             store.billingScopeId,
         )
         if (consumed == null) throw ApiException(429, "This store has no generation allowance available")
-        dsl.execute("INSERT INTO jobs (id, workspace_id, billing_scope_id, idempotency_key, input_image_1, input_image_2) VALUES (?, ?, ?, ?, ?, ?)", jobId, store.workspaceId, store.billingScopeId, requestId, image1, image2)
+        dsl.execute("INSERT INTO jobs (id, workspace_id, billing_scope_id, idempotency_key, input_image_1, input_image_2, input_images) VALUES (?, ?, ?, ?, ?, ?, ?)", jobId, store.workspaceId, store.billingScopeId, requestId, imageKeys.first(), imageKeys.getOrElse(1) { imageKeys.first() }, imageKeys.toTypedArray())
         return jobs.findById(jobId)!!
     }
 

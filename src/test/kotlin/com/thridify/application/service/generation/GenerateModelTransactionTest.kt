@@ -23,6 +23,8 @@ import java.util.UUID
 import kotlin.test.assertEquals
 
 class GenerateModelTransactionTest : IntegrationTestBase() {
+    @Autowired private lateinit var providers: com.thridify.domain.generation.GenerationProviderRegistry
+
     @Autowired private lateinit var jobs: JobRepository
 
     @Autowired private lateinit var history: JobHistoryRepository
@@ -56,7 +58,40 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         GenerationImage(byteArrayOf(2), "second.png", "image/png"),
     )
 
-    private fun service(taskPublisher: GenerationTaskPublisher = publisher) = GenerateModelApplicationService(storage, jobs, history, taskPublisher, transactions, GenerationPolicy(), metrics)
+    private fun service(taskPublisher: GenerationTaskPublisher = publisher, registry: com.thridify.domain.generation.GenerationProviderRegistry = providers) = GenerateModelApplicationService(storage, jobs, history, taskPublisher, transactions, GenerationPolicy(), metrics, registry)
+
+    @Test
+    fun `backend persists and queues one hundred views for a provider without a ceiling`() {
+        val provider = object : com.thridify.domain.generation.GenerationProviderClient {
+            override val name = "future"
+            override val maxInputImages: Int? = null
+            override fun startGeneration(jobId: UUID, inputImages: List<String>) = error("Unused external submission")
+            override fun startGeneration(jobId: UUID, inputImage1: String, inputImage2: String?) = error("Unused")
+            override fun retrieveTask(taskId: String) = error("Unused")
+            override fun deleteTask(taskId: String) = Unit
+        }
+        val registry = object : com.thridify.domain.generation.GenerationProviderRegistry {
+            override fun current() = provider
+            override fun named(name: String) = provider
+        }
+        val photos = List(100) { GenerationImage(byteArrayOf(1), "$it.png", "image/png") }
+        val result = service(registry = registry).execute(GenerateModelCommand(apiKey(), photos))
+        val job = jobs.findById(result.jobId)!!
+        assertEquals(100, job.inputImages.size)
+        assertEquals(100, job.inputImages.distinct().size)
+        val payload = dsl.fetchOne("SELECT payload::text AS payload FROM outbox_messages WHERE aggregate_id = ?", result.jobId)!!.get("payload", String::class.java)
+        val queued = com.fasterxml.jackson.module.kotlin.jacksonObjectMapper().readTree(payload).path("imageKeys").map { it.asText() }
+        assertEquals(job.inputImages, queued)
+        verify(exactly = 100) { storage.upload(any(), any(), "image/png") }
+    }
+
+    @Test
+    fun `provider count rejection happens before uploads or job creation`() {
+        val input = command()
+        assertThrows<BadRequestException> { service().execute(input.copy(images = List(5) { input.images.first() })) }
+        verify(exactly = 0) { storage.upload(any(), any(), any()) }
+        assertEquals(0, dsl.fetchOne("SELECT count(*) AS total FROM jobs")!!.get("total", Int::class.java))
+    }
 
     @Test
     fun `outbox failure rolls back the job history and outbox after uploads`() {
@@ -83,7 +118,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
 
     @Test
     fun `empty images fail before storage or job persistence`() {
-        val command = command().copy(image2 = GenerationImage(byteArrayOf(), "empty.png", "image/png"))
+        val command = command().let { it.copy(images = listOf(it.images[0], GenerationImage(byteArrayOf(), "empty.png", "image/png"))) }
         assertThrows<BadRequestException> { service().execute(command) }
         verify(exactly = 0) { storage.upload(any(), any(), any()) }
     }

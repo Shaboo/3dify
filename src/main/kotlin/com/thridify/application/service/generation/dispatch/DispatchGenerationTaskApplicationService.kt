@@ -39,7 +39,12 @@ class DispatchGenerationTaskApplicationService(
         }
         val taskId = try {
             // External mutation happens after reservation commits, never in a DB transaction.
-            provider.startGeneration(id, command.imageKey1, command.imageKey2)
+            provider.validateInputImages(command.imageKeys.size)
+            if (command.imageKeys.size == 2) {
+                provider.startGeneration(id, command.imageKeys[0], command.imageKeys[1])
+            } else {
+                provider.startGeneration(id, command.imageKeys)
+            }
         } catch (ex: Exception) {
             if (ex is GenerationProviderException && !ex.ambiguous && ex.retryable) {
                 transactions.transaction { tasks.retrySubmission(id, ex.retryAfterSeconds) }
@@ -47,13 +52,13 @@ class DispatchGenerationTaskApplicationService(
                 log.warn("Generation dispatch deferred jobId={} provider={} retry_after_seconds={}", id, provider.name, ex.retryAfterSeconds)
                 return
             }
+            val uncertain = ex !is com.thridify.shared.exception.BadRequestException && (ex as? GenerationProviderException)?.ambiguous != false
             transactions.transaction {
-                tasks.submissionFailed(id, (ex as? GenerationProviderException)?.ambiguous != false)
+                tasks.submissionFailed(id, uncertain)
                 jobs.markFailed(id, "Generation provider could not accept the task")
                 history.insert(id, "FAILED", "Generation provider could not accept the task")
             }
             metrics.jobsFailed.increment()
-            val uncertain = (ex as? GenerationProviderException)?.ambiguous != false
             metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_DISPATCH, if (uncertain) AppMetrics.WorkflowOutcome.UNCERTAIN else AppMetrics.WorkflowOutcome.FAILED)
             log.error("Generation dispatch failed jobId={} provider={} uncertain={} error_type={}", id, provider.name, uncertain, ex.javaClass.simpleName)
             return
@@ -72,6 +77,6 @@ class DispatchGenerationTaskApplicationService(
         }
         metrics.jobsDispatched.increment()
         metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_DISPATCH, AppMetrics.WorkflowOutcome.COMPLETED)
-        log.info("Generation dispatched jobId={} provider={}", id, provider.name)
+        log.info("Generation dispatched jobId={} provider={} image_count={}", id, provider.name, command.imageKeys.size)
     }
 }

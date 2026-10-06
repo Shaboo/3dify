@@ -41,7 +41,7 @@ class SecurityConfig(
 
     private fun shopifyCorsConfigurationSource(): CorsConfigurationSource {
         val cfg = CorsConfiguration()
-        cfg.allowedOrigins = shopifyOrigins.split(",").map(String::trim).filter(String::isNotBlank)
+        cfg.allowedOrigins = shopifyOrigins.split(",").map(String::trim).filter(String::isNotBlank) + "https://extensions.shopifycdn.com"
         cfg.allowedMethods = listOf("GET", "POST", "OPTIONS")
         cfg.allowedHeaders = listOf("Authorization", "Content-Type", "Idempotency-Key")
         cfg.exposedHeaders = listOf("X-Shopify-Retry-Invalid-Session-Request")

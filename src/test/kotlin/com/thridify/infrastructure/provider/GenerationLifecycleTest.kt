@@ -63,6 +63,8 @@ class GenerationLifecycleTest : IntegrationTestBase() {
         resetDatabase()
         clearMocks(providers, outputs)
         every { meshy.name } returns "meshy"
+        every { meshy.validateInputImages(any()) } just Runs
+        every { runpod.validateInputImages(any()) } just Runs
         every { runpod.name } returns "runpod"
         every { providers.current() } returns meshy
         every { providers.named("meshy") } returns meshy
@@ -158,6 +160,24 @@ class GenerationLifecycleTest : IntegrationTestBase() {
         reconcile.execute()
         assertEquals(null, jobs.findById(id))
         verify(exactly = 1) { outputs.delete(id) }
+    }
+
+    @Test
+    fun `four-photo retry uses every persisted view after the queue delivery is gone`() {
+        val id = job()
+        val keys = listOf("front", "back", "left", "right")
+        dsl.execute("UPDATE jobs SET input_images = ? WHERE id = ?", keys.toTypedArray(), id)
+        var calls = 0
+        every { meshy.startGeneration(id, keys) } answers {
+            if (calls++ == 0) throw GenerationProviderException(false, "queue full", true)
+            "multi-image-to-3d:retried-four"
+        }
+        dispatch.execute(DispatchGenerationTaskCommand(id, keys))
+        dsl.execute("UPDATE generation_provider_tasks SET next_poll_at = now() WHERE job_id = ?", id)
+        reconcile.execute()
+        assertEquals("meshy:multi-image-to-3d:retried-four", jobs.findById(id)!!.externalTaskId)
+        verify(exactly = 2) { meshy.startGeneration(id, keys) }
+        verify(exactly = 0) { meshy.startGeneration(any(), any(), any()) }
     }
 
     @Test

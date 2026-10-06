@@ -20,6 +20,10 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
         val J_API_KEY_ID = DSL.field(DSL.name("jobs", "api_key_id"), UUID::class.java)
         val J_STATUS = DSL.field(DSL.name("jobs", "status"), String::class.java)
         val J_EXTERNAL_TASK_ID = DSL.field(DSL.name("jobs", "external_task_id"), String::class.java)
+        val J_PRODUCT_ID = DSL.field("(SELECT a.product_id FROM shopify_model_attachments a WHERE a.job_id = jobs.id)", String::class.java)
+        val J_ATTACHMENT_STATUS = DSL.field("(SELECT a.status FROM shopify_model_attachments a WHERE a.job_id = jobs.id)", String::class.java)
+        val J_ATTACHMENT_ERROR = DSL.field("(SELECT a.error_message FROM shopify_model_attachments a WHERE a.job_id = jobs.id)", String::class.java)
+        val J_INPUT_IMAGES = DSL.field(DSL.name("jobs", "input_images"), Array<String>::class.java)
         val J_INPUT_IMAGE_1 = DSL.field(DSL.name("jobs", "input_image_1"), String::class.java)
         val J_INPUT_IMAGE_2 = DSL.field(DSL.name("jobs", "input_image_2"), String::class.java)
         val J_OUTPUT_GLB_URL = DSL.field(DSL.name("jobs", "output_glb_url"), String::class.java)
@@ -36,7 +40,7 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
         // All job columns (for SELECT)
         private val JOB_COLS = arrayOf(
             J_ID, J_API_KEY_ID, J_STATUS, J_EXTERNAL_TASK_ID,
-            J_INPUT_IMAGE_1, J_INPUT_IMAGE_2,
+            J_INPUT_IMAGE_1, J_INPUT_IMAGE_2, J_INPUT_IMAGES, J_PRODUCT_ID, J_ATTACHMENT_STATUS, J_ATTACHMENT_ERROR,
             J_OUTPUT_GLB_URL, J_OUTPUT_USDZ_URL, J_WEBHOOK_URL,
             J_ERROR_MESSAGE, J_CREATED_AT, J_COMPLETED_AT,
         )
@@ -57,14 +61,17 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
     // Helper to cast a status string to the Postgres job_status ENUM
     private fun statusVal(s: String) = DSL.field("?::job_status", String::class.java, s)
 
-    override fun insert(id: UUID, apiKeyId: UUID, imageKey1: String, imageKey2: String) {
+    override fun insert(id: UUID, apiKeyId: UUID, imageKey1: String, imageKey2: String) = insert(id, apiKeyId, listOf(imageKey1, imageKey2))
+
+    override fun insert(id: UUID, apiKeyId: UUID, imageKeys: List<String>) {
         dsl.insertInto(TABLE)
             .set(COL_ID, id)
             .set(COL_API_KEY_ID, apiKeyId)
             .set(DSL.field("workspace_id", UUID::class.java), DSL.field("(SELECT workspace_id FROM api_keys WHERE id = ?)", UUID::class.java, apiKeyId))
             .set(DSL.field("billing_scope_id", UUID::class.java), DSL.field("(SELECT billing_scope_id FROM api_keys WHERE id = ?)", UUID::class.java, apiKeyId))
-            .set(COL_INPUT_IMAGE_1, imageKey1)
-            .set(COL_INPUT_IMAGE_2, imageKey2)
+            .set(COL_INPUT_IMAGE_1, imageKeys.first())
+            .set(COL_INPUT_IMAGE_2, imageKeys.getOrElse(1) { imageKeys.first() })
+            .set(DSL.field("input_images", Array<String>::class.java), imageKeys.toTypedArray())
             .execute()
     }
 
@@ -142,5 +149,9 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
         errorMessage = r.get(J_ERROR_MESSAGE),
         createdAt = r.get(J_CREATED_AT)!!,
         completedAt = r.get(J_COMPLETED_AT),
+        productId = r.get(J_PRODUCT_ID),
+        attachmentStatus = r.get(J_ATTACHMENT_STATUS),
+        attachmentError = r.get(J_ATTACHMENT_ERROR),
+        inputImages = r.get(J_INPUT_IMAGES)?.toList() ?: listOf(r.get(J_INPUT_IMAGE_1)!!, r.get(J_INPUT_IMAGE_2)!!),
     )
 }

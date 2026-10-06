@@ -27,6 +27,8 @@ class PostgresShopifyWebhookRepository(private val dsl: DSLContext) : ShopifyWeb
             dsl.execute("UPDATE platform_connections SET status = 'redacting' WHERE id = ?", connection.get("id", UUID::class.java))
         }
         if (event.topic == "app/uninstalled") {
+            dsl.execute("DELETE FROM shopify_offline_credentials WHERE connection_id = ?", connection.get("id", UUID::class.java))
+            dsl.execute("UPDATE shopify_model_attachments SET status = 'canceled', error_message = 'The Shopify app was uninstalled', lease_id = NULL, lease_until = NULL WHERE connection_id = ? AND status <> 'attached'", connection.get("id", UUID::class.java))
             dsl.execute("UPDATE platform_connections SET status = 'disconnected', disconnected_at = ?, billing_checked_at = ? WHERE id = ?", Timestamp.from(event.occurredAt.toInstant()), Timestamp.from(event.occurredAt.toInstant()), connection.get("id", UUID::class.java))
             dsl.execute("UPDATE subscriptions SET status = 'canceled', updated_at = now() WHERE provider = 'shopify' AND billing_scope_id IN (SELECT id FROM billing_scopes WHERE connection_id = ?)", connection.get("id", UUID::class.java))
         }
@@ -46,13 +48,13 @@ class PostgresShopifyWebhookRepository(private val dsl: DSLContext) : ShopifyWeb
 
     override fun assetsForRedaction(event: ShopifyWebhook): List<String> = dsl.fetch(
         """
-        SELECT j.input_image_1, j.input_image_2 FROM jobs j JOIN billing_scopes b ON b.id = j.billing_scope_id
+        SELECT j.input_images, j.input_image_1, j.input_image_2 FROM jobs j JOIN billing_scopes b ON b.id = j.billing_scope_id
         JOIN platform_connections c ON c.id = b.connection_id
         WHERE c.platform = 'shopify' AND c.external_id = ? AND c.status = 'redacting' AND c.installed_at <= ?
         """.trimIndent(),
         event.shopId,
         Timestamp.from(event.occurredAt.toInstant()),
-    ).flatMap { listOf(it.get("input_image_1", String::class.java)!!, it.get("input_image_2", String::class.java)!!) }
+    ).flatMap { it.get("input_images", Array<String>::class.java)?.toList() ?: listOf(it.get("input_image_1", String::class.java)!!, it.get("input_image_2", String::class.java)!!) }
 
     override fun outputsForRedaction(event: ShopifyWebhook): List<String> = dsl.fetch(
         """

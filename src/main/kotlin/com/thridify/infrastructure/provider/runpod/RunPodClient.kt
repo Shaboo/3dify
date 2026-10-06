@@ -24,6 +24,13 @@ class RunPodClient(
     http: RestClient? = null,
 ) : GenerationProviderClient {
     override val name = "runpod"
+
+    // The current owned worker contract accepts two named views.
+    override val maxInputImages = 2
+    override fun startGeneration(jobId: UUID, inputImages: List<String>): String {
+        validateInputImages(inputImages.size)
+        return startGeneration(jobId, inputImages.first(), inputImages.getOrNull(1))
+    }
     private val restClient = http ?: RestClient.builder().requestFactory(
         org.springframework.http.client.JdkClientHttpRequestFactory(
             HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build(),

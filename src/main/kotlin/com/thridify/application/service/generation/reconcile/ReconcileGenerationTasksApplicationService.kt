@@ -96,7 +96,14 @@ class ReconcileGenerationTasksApplicationService(
             if (!tasks.canComplete(task.jobId) || !tasks.beginRetry(task.jobId, requireNotNull(task.leaseId))) null else jobs.findById(task.jobId)
         } ?: return
         val id = try {
-            providers.named(task.provider).startGeneration(task.jobId, job.inputImage1, job.inputImage2)
+            providers.named(task.provider).let { provider ->
+                provider.validateInputImages(job.inputImages.size)
+                if (job.inputImages.size == 2) {
+                    provider.startGeneration(task.jobId, job.inputImages[0], job.inputImages[1])
+                } else {
+                    provider.startGeneration(task.jobId, job.inputImages)
+                }
+            }
         } catch (ex: Exception) {
             transactions.transaction {
                 // Job-before-task lock order matches completion and privacy cleanup.

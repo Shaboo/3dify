@@ -31,6 +31,7 @@ class DispatchAndPublishTest {
     init {
         every { providers.current() } returns provider
         every { provider.name } returns "meshy"
+        every { provider.validateInputImages(any()) } returns Unit
         every { tasks.reserve(any(), any()) } returns true
         every { transactions.transaction(any<() -> Any>()) } answers { firstArg<() -> Any>().invoke() }
     }

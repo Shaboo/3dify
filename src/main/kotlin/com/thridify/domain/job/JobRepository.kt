@@ -5,6 +5,10 @@ import java.util.UUID
 
 interface JobRepository {
     fun insert(id: UUID, apiKeyId: UUID, imageKey1: String, imageKey2: String): Unit
+    fun insert(id: UUID, apiKeyId: UUID, imageKeys: List<String>) {
+        require(imageKeys.size == 2) { "This repository does not support image lists" }
+        insert(id, apiKeyId, imageKeys[0], imageKeys[1])
+    }
     fun updateStatus(jobId: UUID, status: String): Unit
     fun markSuccess(jobId: UUID, glbUrl: String, usdzUrl: String): Unit
     fun markFailed(jobId: UUID, errorMessage: String): Unit

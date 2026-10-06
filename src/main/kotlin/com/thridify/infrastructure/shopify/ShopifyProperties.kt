@@ -9,6 +9,7 @@ data class ShopifyProperties(
     var clientSecret: String = "",
     var appId: String = "",
     var appHandle: String = "",
+    var credentialEncryptionKey: String = "",
     var partnerOrgId: String = "",
     var partnerAccessToken: String = "",
     var partnerRequestIntervalMs: Long = 300,

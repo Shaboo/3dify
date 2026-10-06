@@ -1,0 +1,48 @@
+# Loaded by the "3dify Local" IntelliJ run configuration.
+# Edit config/application-local.properties, which is ignored by Git.
+# Native Spring properties: no shell exports or IntelliJ dotenv plugin needed.
+
+spring.datasource.url=jdbc:postgresql://localhost:5432/thridify
+spring.datasource.username=3dify
+spring.datasource.password=3dify
+spring.rabbitmq.host=localhost
+spring.rabbitmq.port=5672
+spring.rabbitmq.username=omni3d
+spring.rabbitmq.password=omni3d
+server.port=8080
+
+shopify.enabled=true
+shopify.client-id=aafff0ff1c4d6514485dcfb0a98bb104
+# Required: copy the client secret from your Shopify test app.
+shopify.client-secret=
+# Required: frontend HTTPS origin shown by shopify app dev, without a path.
+shopify.frontend-origins=
+shopify.app-id=
+shopify.app-handle=3dify-test
+shopify.partner-org-id=
+shopify.partner-access-token=
+shopify.jobs-enabled=true
+
+# Fill these in to test actual model generation and storage.
+generation.provider=meshy
+generation.meshy.enabled=false
+generation.meshy.api-key=
+generation.polling-enabled=false
+omni3d.r2.endpoint=
+omni3d.r2.access-key=
+omni3d.r2.secret-key=
+omni3d.r2.bucket=
+omni3d.r2.public-url=
+
+# Optional alternative generation provider.
+omni3d.runpod.enabled=false
+omni3d.runpod.api-url=
+omni3d.runpod.api-key=
+omni3d.runpod.webhook-url=
+
+# Optional direct-user Stripe testing (Shopify uses its own billing).
+stripe.secret-key=sk_test_placeholder_replace_me
+stripe.webhook-secret=whsec_placeholder_replace_me
+
+# Required for automatic product attachment: base64-encoded 32-byte AES key.
+shopify.credential-encryption-key=

@@ -33,7 +33,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 20MB
-      max-request-size: 42MB
+      max-request-size: ${GENERATION_MAX_REQUEST_SIZE:85MB}
 
   mvc:
     log-request-details: false
@@ -97,6 +97,10 @@ stripe:
 
 server:
   port: 8080
+  tomcat:
+    # Photo count belongs to the provider; aggregate byte limits still protect uploads.
+    max-part-count: -1
+    max-parameter-count: -1
 
 # --- Logging ---
 logging:
@@ -109,13 +113,15 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [requestId=%X{requestId} jobId=%X{jobId} userId=%X{userId} apiKeyId=%X{apiKeyId}] - %msg%n"
 
-# Shopify-facing UI and product merchandising belong to a separate app project.
+# Shopify UI lives in the separate app; product attachment runs in this backend.
 shopify:
   enabled: ${SHOPIFY_ENABLED:false}
   client-id: ${SHOPIFY_CLIENT_ID:}
   client-secret: ${SHOPIFY_CLIENT_SECRET:}
   app-id: ${SHOPIFY_APP_ID:}
   app-handle: ${SHOPIFY_APP_HANDLE:}
+  credential-encryption-key: ${SHOPIFY_CREDENTIAL_ENCRYPTION_KEY:}
+  attachment-delay-ms: 15000
   partner-org-id: ${SHOPIFY_PARTNER_ORG_ID:}
   partner-access-token: ${SHOPIFY_PARTNER_ACCESS_TOKEN:}
   api-version: "2026-07"

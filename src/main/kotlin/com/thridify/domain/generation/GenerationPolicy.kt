@@ -15,6 +15,9 @@ class GenerationPolicy {
     fun ensureImagesPresent(firstSize: Int, secondSize: Int) {
         if (firstSize == 0 || secondSize == 0) throw BadRequestException("Both image1 and image2 are required")
     }
+    fun ensureImagesPresent(sizes: List<Int>) {
+        if (sizes.isEmpty() || sizes.any { it == 0 }) throw BadRequestException("At least one non-empty photo is required")
+    }
     fun inputKey(filename: String?) = "inputs/${UUID.randomUUID()}_$filename"
     fun matchesTask(actualJobId: UUID?, expectedJobId: UUID) = actualJobId == expectedJobId
     fun callbackOutcome(status: String, hasOutput: Boolean, glb: String?, usdz: String?): GenerationOutcome = when {

@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 @Component
 class AppMetrics(private val registry: MeterRegistry) {
 
-    enum class Workflow { GENERATION_DISPATCH, GENERATION_RECONCILIATION, SHOPIFY_RECONCILIATION, SHOPIFY_PRIVACY, GENERATION_CALLBACK, SHOPIFY_WEBHOOK }
+    enum class Workflow { GENERATION_DISPATCH, GENERATION_RECONCILIATION, SHOPIFY_RECONCILIATION, SHOPIFY_PRIVACY, GENERATION_CALLBACK, SHOPIFY_WEBHOOK, SHOPIFY_ATTACHMENT }
     enum class WorkflowOutcome { COMPLETED, PENDING, FAILED, IGNORED, ACCEPTED, RETRY_SCHEDULED, UNCERTAIN }
 
     /** Per-item results for loops that deliberately catch errors and return normally. */

@@ -15,6 +15,12 @@ class TaskProducer(
     @Value("\${omni3d.rabbitmq.routing-key}") private val routingKey: String,
 ) {
 
+    fun sendTask(jobId: UUID, imageKeys: List<String>) {
+        if (imageKeys.size == 2) return sendTask(jobId, imageKeys[0], imageKeys[1])
+        val message = GenerationTaskMessage(jobId, imageKeys.first(), imageKeys.getOrElse(1) { imageKeys.first() }, imageKeys)
+        rabbitTemplate.convertAndSend(exchange, routingKey, objectMapper.writeValueAsString(message))
+    }
+
     fun sendTask(jobId: UUID, imageKey1: String, imageKey2: String) {
         val message = GenerationTaskMessage(
             jobId = jobId,

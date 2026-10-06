@@ -12,4 +12,8 @@ data class JobResult(
     val errorMessage: String?,
     val createdAt: String,
     val completedAt: String?,
+    val inputImages: List<String> = listOf(inputImage1, inputImage2),
+    val productId: String? = null,
+    val attachmentStatus: String? = null,
+    val attachmentError: String? = null,
 )

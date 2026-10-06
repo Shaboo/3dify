@@ -2,7 +2,6 @@ package com.thridify.interfaces.rest
 
 import com.thridify.application.service.generation.submit.GenerateModelApplicationService
 import com.thridify.application.service.generation.submit.GenerateModelCommand
-import com.thridify.application.service.generation.submit.GenerationImage
 import com.thridify.application.service.job.getjob.GetJobApplicationService
 import com.thridify.application.service.job.getjob.GetJobQuery
 import com.thridify.application.service.job.history.GetJobHistoryApplicationService
@@ -34,9 +33,10 @@ class GenerateController(
     @ResponseStatus(HttpStatus.ACCEPTED)
     fun generate(
         authentication: Authentication,
-        @RequestPart("image1") image1: MultipartFile,
-        @RequestPart("image2") image2: MultipartFile,
-    ) = generate.execute(GenerateModelCommand(UUID.fromString(authentication.principal as String), image1.toInput(), image2.toInput())).toResponse()
+        @RequestPart("images", required = false) images: List<MultipartFile>?,
+        @RequestPart("image1", required = false) image1: MultipartFile?,
+        @RequestPart("image2", required = false) image2: MultipartFile?,
+    ) = generate.execute(GenerateModelCommand(UUID.fromString(authentication.principal as String), com.thridify.interfaces.rest.dto.generationImages(images, image1, image2))).toResponse()
 
     @GetMapping("/jobs")
     fun listJobs(authentication: Authentication) = listJobs.execute(ListApiKeyJobsQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
@@ -46,5 +46,4 @@ class GenerateController(
 
     @GetMapping("/jobs/{jobId}/history")
     fun getJobHistory(@PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId)).map { it.toResponse() }
-    private fun MultipartFile.toInput() = GenerationImage(bytes, originalFilename, contentType ?: "image/png")
 }

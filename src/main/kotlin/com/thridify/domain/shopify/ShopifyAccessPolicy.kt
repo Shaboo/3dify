@@ -12,7 +12,7 @@ class ShopifyAccessPolicy {
         return found
     }
     fun image(size: Int, contentType: String) {
-        if (size !in 1..(20 * 1024 * 1024) || contentType !in setOf("image/jpeg", "image/png", "image/webp")) throw ApiException(400, "Choose two JPEG, PNG or WebP images, each up to 20 MB")
+        if (size !in 1..(20 * 1024 * 1024) || contentType !in setOf("image/jpeg", "image/png", "image/webp")) throw ApiException(400, "Choose JPEG, PNG or WebP images, each up to 20 MB")
     }
     fun generation(entitlement: ShopifyEntitlement, now: OffsetDateTime) {
         if (entitlement.status !in setOf("active", "trialing") || entitlement.periodEnd?.isAfter(now) != true) throw ApiException(402, "Choose an active Shopify plan before generating models")

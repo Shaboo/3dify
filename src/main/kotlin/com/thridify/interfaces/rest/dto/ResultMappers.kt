@@ -22,7 +22,7 @@ fun WebhookResult.toResponse() = WebhookResponse(id = id, url = url, createdAt =
 
 fun GenerateResult.toResponse() = GenerateResponse(jobId = jobId, status = status)
 
-fun JobResult.toResponse() = JobResponse(id = id, status = status, inputImage1 = inputImage1, inputImage2 = inputImage2, outputGlbUrl = outputGlbUrl, outputUsdzUrl = outputUsdzUrl, errorMessage = errorMessage, createdAt = createdAt, completedAt = completedAt)
+fun JobResult.toResponse() = JobResponse(id = id, status = status, inputImage1 = inputImage1, inputImage2 = inputImage2, outputGlbUrl = outputGlbUrl, outputUsdzUrl = outputUsdzUrl, errorMessage = errorMessage, createdAt = createdAt, completedAt = completedAt, inputImages = inputImages, productId = productId, attachmentStatus = attachmentStatus, attachmentError = attachmentError)
 
 fun JobHistoryResult.toResponse() = JobHistoryEntry(id = id, jobId = jobId, status = status, details = details, createdAt = createdAt)
 

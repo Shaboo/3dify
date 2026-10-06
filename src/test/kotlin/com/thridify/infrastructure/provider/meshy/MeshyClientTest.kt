@@ -34,6 +34,26 @@ class MeshyClientTest {
     }
 
     @Test
+    fun `four photos reach Meshy in order without truncation`() {
+        every { images.dataUri("three") } returns "data:image/png;base64,dGhyZWU="
+        every { images.dataUri("four") } returns "data:image/png;base64,Zm91cg=="
+        server.expect(requestTo("https://api.meshy.ai/openapi/v1/multi-image-to-3d"))
+            .andExpect(content().json("""{"image_urls":["data:image/png;base64,b25l","data:image/png;base64,dHdv","data:image/png;base64,dGhyZWU=","data:image/png;base64,Zm91cg=="],"ai_model":"meshy-7.1","should_texture":true,"target_formats":["glb","usdz"]}"""))
+            .andRespond(withSuccess("""{"result":"four-task"}""", MediaType.APPLICATION_JSON))
+        assertEquals("multi-image-to-3d:four-task", client.startGeneration(UUID.randomUUID(), listOf("one", "two", "three", "four")))
+        server.verify()
+    }
+
+    @Test
+    fun `Meshy rejects zero and five photos before reading storage or making HTTP calls`() {
+        for (keys in listOf(emptyList(), List(5) { "one" })) {
+            assertThrows<com.thridify.shared.exception.BadRequestException> { client.startGeneration(UUID.randomUUID(), keys) }
+        }
+        io.mockk.verify(exactly = 0) { images.dataUri(any()) }
+        server.verify()
+    }
+
+    @Test
     fun `two views use multi-image with GLB USDZ and private data URI inputs`() {
         server.expect(requestTo("https://api.meshy.ai/openapi/v1/multi-image-to-3d"))
             .andExpect(method(HttpMethod.POST)).andExpect(header("Authorization", "Bearer secret"))

@@ -22,24 +22,27 @@ class GenerateModelApplicationService(
     private val transactions: TransactionProvider,
     private val policy: GenerationPolicy,
     private val metrics: AppMetrics,
+    private val providers: com.thridify.domain.generation.GenerationProviderRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: GenerateModelCommand): GenerateResult {
-        policy.ensureImagesPresent(command.image1.data.size, command.image2.data.size)
-        val key1 = policy.inputKey(command.image1.filename)
-        val key2 = policy.inputKey(command.image2.filename)
-        storage.upload(key1, command.image1.data, command.image1.contentType)
-        storage.upload(key2, command.image2.data, command.image2.contentType)
+        policy.ensureImagesPresent(command.images.map { it.data.size })
+        providers.current().validateInputImages(command.images.size)
+        val keys = command.images.map { image ->
+            val key = policy.inputKey(image.filename)
+            storage.upload(key, image.data, image.contentType)
+            key
+        }
         return transactions.transaction {
             val id = UUID.randomUUID()
             val previousJobId = MDC.get("jobId")
             MDC.put("jobId", id.toString())
             try {
-                jobs.insert(id, command.apiKeyId, key1, key2)
+                jobs.insert(id, command.apiKeyId, keys)
                 history.insert(id, "PENDING", "Job created")
-                publisher.publish(id, key1, key2)
+                publisher.publish(id, keys)
                 metrics.jobsCreated.increment()
-                log.info("Job {} created and submitted for generation", id)
+                log.info("Job {} created and submitted for generation image_count={}", id, command.images.size)
                 GenerateResult(id, "PENDING")
             } finally {
                 if (previousJobId == null) MDC.remove("jobId") else MDC.put("jobId", previousJobId)

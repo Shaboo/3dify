@@ -19,6 +19,26 @@ import kotlin.test.assertEquals
 
 class GenerationTaskContractTest {
     @Test
+    fun `unbounded input list survives outbox serialization and worker deserialization`() {
+        val mapper = jacksonObjectMapper()
+        val id = UUID.randomUUID()
+        val keys = List(100) { "image-$it" }
+        val outbox: OutboxRepository = mockk()
+        val stored = slot<String>()
+        every { outbox.insert("JOB", id, capture(stored)) } just Runs
+        OutboxGenerationTaskPublisher(outbox, mapper).publish(id, keys)
+        val rabbit: RabbitTemplate = mockk()
+        val delivered = slot<String>()
+        every { rabbit.convertAndSend("exchange", "routing-key", capture(delivered)) } just Runs
+        TaskProducer(rabbit, mapper, "exchange", "routing-key").sendTask(id, keys)
+        assertEquals(mapper.readTree(stored.captured), mapper.readTree(delivered.captured))
+        val dispatch: DispatchGenerationTaskApplicationService = mockk()
+        every { dispatch.execute(any()) } just Runs
+        TaskWorker(mapper, dispatch).handleTask(stored.captured)
+        verify(exactly = 1) { dispatch.execute(DispatchGenerationTaskCommand(id, keys)) }
+    }
+
+    @Test
     fun `outbox publisher rabbit producer and listener preserve the task json contract`() {
         val mapper = jacksonObjectMapper()
         val id = UUID.randomUUID()

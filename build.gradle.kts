@@ -166,6 +166,13 @@ tasks.named("jooqCodegen") {
     mustRunAfter("flywayMigrate")
 }
 
+tasks.register<Exec>("startLocalInfrastructure") {
+    description = "Start the local database, RabbitMQ and Redis before running from IntelliJ."
+    group = "application"
+    workingDir(projectDir)
+    commandLine("docker", "compose", "up", "-d", "--wait", "--wait-timeout", "60")
+}
+
 // Uses the same test sources and inherited tag as the full suite.
 tasks.register<Test>("integrationTest") {
     description = "Run all integration tests against PostgreSQL Testcontainers (requires Docker)."

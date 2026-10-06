@@ -16,7 +16,7 @@ class TaskWorker(private val mapper: ObjectMapper, private val dispatch: Dispatc
         val previous = MDC.getCopyOfContextMap()
         MDC.put("jobId", task.jobId.toString())
         try {
-            dispatch.execute(DispatchGenerationTaskCommand(task.jobId, task.inputImage1Key, task.inputImage2Key))
+            dispatch.execute(DispatchGenerationTaskCommand(task.jobId, task.imageKeys ?: listOf(task.inputImage1Key, task.inputImage2Key)))
         } finally {
             if (previous == null) MDC.clear() else MDC.setContextMap(previous)
         }

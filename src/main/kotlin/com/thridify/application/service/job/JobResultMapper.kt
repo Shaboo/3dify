@@ -5,5 +5,5 @@ import com.thridify.domain.job.JobEntity
 
 internal fun JobEntity.toResult() = JobResult(
     id, status, inputImage1, inputImage2, outputGlbUrl, outputUsdzUrl,
-    errorMessage, createdAt.toString(), completedAt?.toString(),
+    errorMessage, createdAt.toString(), completedAt?.toString(), inputImages, productId, attachmentStatus, attachmentError,
 )
