@@ -32,13 +32,19 @@ class DispatchGenerationTaskApplicationService(
                 true
             }
         }
-        if (!reserved) return
+        if (!reserved) {
+            metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_DISPATCH, AppMetrics.WorkflowOutcome.IGNORED)
+            log.debug("Generation dispatch skipped jobId={} reason=already_reserved", id)
+            return
+        }
         val taskId = try {
             // External mutation happens after reservation commits, never in a DB transaction.
             provider.startGeneration(id, command.imageKey1, command.imageKey2)
         } catch (ex: Exception) {
             if (ex is GenerationProviderException && !ex.ambiguous && ex.retryable) {
                 transactions.transaction { tasks.retrySubmission(id, ex.retryAfterSeconds) }
+                metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_DISPATCH, AppMetrics.WorkflowOutcome.RETRY_SCHEDULED)
+                log.warn("Generation dispatch deferred jobId={} provider={} retry_after_seconds={}", id, provider.name, ex.retryAfterSeconds)
                 return
             }
             transactions.transaction {
@@ -47,6 +53,9 @@ class DispatchGenerationTaskApplicationService(
                 history.insert(id, "FAILED", "Generation provider could not accept the task")
             }
             metrics.jobsFailed.increment()
+            val uncertain = (ex as? GenerationProviderException)?.ambiguous != false
+            metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_DISPATCH, if (uncertain) AppMetrics.WorkflowOutcome.UNCERTAIN else AppMetrics.WorkflowOutcome.FAILED)
+            log.error("Generation dispatch failed jobId={} provider={} uncertain={} error_type={}", id, provider.name, uncertain, ex.javaClass.simpleName)
             return
         }
         // A DB failure here leaves a submitting reservation for manual reconciliation.
@@ -62,5 +71,7 @@ class DispatchGenerationTaskApplicationService(
             throw ex
         }
         metrics.jobsDispatched.increment()
+        metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_DISPATCH, AppMetrics.WorkflowOutcome.COMPLETED)
+        log.info("Generation dispatched jobId={} provider={}", id, provider.name)
     }
 }

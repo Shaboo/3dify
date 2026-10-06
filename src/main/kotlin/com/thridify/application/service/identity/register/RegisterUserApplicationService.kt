@@ -28,7 +28,7 @@ class RegisterUserApplicationService(
         val token = tokens.generateToken(id, command.email)
         metrics.usersRegistered.increment()
         MDC.put("userId", id.toString())
-        log.info("User registered successfully [userId={}, email={}]", id, command.email)
+        log.info("User registered successfully [userId={}]", id)
         MDC.remove("userId")
         return AuthResult(token, id, command.email, false)
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.thridify.shared.exception.ApiException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -11,6 +12,7 @@ import java.time.Instant
 
 @RestControllerAdvice
 class GlobalExceptionHandler(private val objectMapper: ObjectMapper) {
+    private val log = LoggerFactory.getLogger(javaClass)
 
     data class ErrorBody(
         val error: String,
@@ -49,5 +51,8 @@ class GlobalExceptionHandler(private val objectMapper: ObjectMapper) {
     fun handleMalformedRequest(ex: Exception, response: HttpServletResponse) = writeError(response, HttpStatus.BAD_REQUEST, "Required request fields are missing or invalid")
 
     @ExceptionHandler(Exception::class)
-    fun handleGeneric(ex: Exception, response: HttpServletResponse) = writeError(response, HttpStatus.INTERNAL_SERVER_ERROR, ex.message ?: "Unexpected error")
+    fun handleGeneric(ex: Exception, response: HttpServletResponse) {
+        log.error("http_request_failed error_type={}", ex.javaClass.simpleName)
+        writeError(response, HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error")
+    }
 }

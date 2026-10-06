@@ -51,5 +51,4 @@ scrape_configs:
       - regex:
           source: context
           expression: 'jobId=(?P<jobId>[a-f0-9-]+)'
-      - labels:
-          jobId:
+      # Keep jobId/requestId in log content; IDs must never become Loki stream labels.

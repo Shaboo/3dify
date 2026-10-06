@@ -45,7 +45,7 @@ class ProviderWebhookController(private val handleCallback: HandleGenerationCall
             GenerationCallbackResult.TASK_MISMATCH -> ResponseEntity.badRequest().build()
         }
     } catch (ex: Exception) {
-        log.error("Error processing RunPod callback for job {}: {}", jobId, ex.message, ex)
+        log.error("Error processing RunPod callback for job {} error_type={}", jobId, ex.javaClass.simpleName)
         ResponseEntity.internalServerError().build()
     }
 }

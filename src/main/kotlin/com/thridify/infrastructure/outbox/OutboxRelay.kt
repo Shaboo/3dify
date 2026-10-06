@@ -20,7 +20,7 @@ class OutboxRelay(
                 log.debug("Outbox message published [msgId={}, jobId={}]", message.id, jobId)
             } catch (ex: Exception) {
                 metrics.outboxFailed.increment()
-                log.error("Failed to publish outbox message [msgId={}]: {}", message.id, ex.message, ex)
+                log.error("Failed to publish outbox message [msgId={}] error_type={}", message.id, ex.javaClass.simpleName)
             }
         }
     }

@@ -37,7 +37,10 @@ class ReconcileGenerationTasksApplicationService(
                     continue
                 }
                 val result = providers.named(task.provider).retrieveTask(requireNotNull(task.taskId))
-                if (result is GenerationProviderResult.Pending) continue
+                if (result is GenerationProviderResult.Pending) {
+                    metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_RECONCILIATION, AppMetrics.WorkflowOutcome.PENDING)
+                    continue
+                }
                 val retained = if (result is GenerationProviderResult.Succeeded) outputs.retain(task.jobId, task.provider, result.glbUrl, result.usdzUrl) else null
                 var removeOutputs = false
                 var durationMs: Long? = null
@@ -63,6 +66,8 @@ class ReconcileGenerationTasksApplicationService(
                 }
                 if (removeOutputs) outputs.delete(task.jobId)
                 if (notification != null) {
+                    metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_RECONCILIATION, AppMetrics.WorkflowOutcome.COMPLETED)
+                    log.info("Generation reconciled jobId={} provider={} status={}", task.jobId, task.provider, notification.status)
                     durationMs?.let(metrics::recordJobDuration)
                     if (notification.status == "SUCCESS") metrics.jobsCompleted.increment() else metrics.jobsFailed.increment()
                     try {
@@ -70,14 +75,17 @@ class ReconcileGenerationTasksApplicationService(
                             notifications.deliver(it.url, notification)
                             metrics.webhookDeliveriesSuccess.increment()
                         }
-                    } catch (_: Exception) {
+                    } catch (ex: Exception) {
                         metrics.webhookDeliveriesFailed.increment()
-                        log.warn("Customer generation notification remains undelivered for job {}", task.jobId)
+                        log.warn("Customer generation notification remains undelivered for job {} error_type={}", task.jobId, ex.javaClass.simpleName)
                     }
+                } else {
+                    metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_RECONCILIATION, AppMetrics.WorkflowOutcome.IGNORED)
                 }
-            } catch (_: Exception) {
+            } catch (ex: Exception) {
                 // Transient reads/downloads are safe to retry; never resubmit an upstream task.
-                log.warn("Generation reconciliation remains pending for job {}", task.jobId)
+                metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_RECONCILIATION, AppMetrics.WorkflowOutcome.FAILED)
+                log.warn("Generation reconciliation remains pending for job {} error_type={}", task.jobId, ex.javaClass.simpleName)
             } finally {
                 transactions.transaction { tasks.reschedule(task.jobId, requireNotNull(task.leaseId)) }
             }
@@ -103,6 +111,19 @@ class ReconcileGenerationTasksApplicationService(
                     }
                 }
             }
+            val retryable = ex is GenerationProviderException && !ex.ambiguous && ex.retryable
+            val uncertain = (ex as? GenerationProviderException)?.ambiguous != false
+            metrics.recordWorkflow(
+                AppMetrics.Workflow.GENERATION_RECONCILIATION,
+                if (retryable) {
+                    AppMetrics.WorkflowOutcome.RETRY_SCHEDULED
+                } else if (uncertain) {
+                    AppMetrics.WorkflowOutcome.UNCERTAIN
+                } else {
+                    AppMetrics.WorkflowOutcome.FAILED
+                },
+            )
+            log.warn("Generation resubmission deferred or failed jobId={} provider={} retryable={} uncertain={} error_type={}", task.jobId, task.provider, retryable, uncertain, ex.javaClass.simpleName)
             return
         }
         try {
@@ -112,6 +133,7 @@ class ReconcileGenerationTasksApplicationService(
                 history.insert(task.jobId, "PROCESSING", "Job dispatched to generation provider")
             }
             metrics.jobsDispatched.increment()
+            metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_RECONCILIATION, AppMetrics.WorkflowOutcome.COMPLETED)
         } catch (ex: Exception) {
             log.error("Provider {} acknowledged task {} for job {}; submission requires reconciliation", task.provider, id, task.jobId)
             throw ex

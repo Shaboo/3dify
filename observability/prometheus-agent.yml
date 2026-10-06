@@ -26,8 +26,3 @@ remote_write:
     basic_auth:
       username: <YOUR_GRAFANA_INSTANCE_ID>
       password: <YOUR_GRAFANA_API_TOKEN>
-    write_relabel_configs:
-      # Drop high-cardinality histogram bucket labels that are rarely needed
-      - source_labels: [__name__]
-        regex: 'jvm_gc_.*|process_.*'
-        action: drop

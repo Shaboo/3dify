@@ -26,7 +26,8 @@ class DispatchAndPublishTest {
     private val providers: GenerationProviderRegistry = mockk()
     private val tasks: GenerationProviderTaskRepository = mockk(relaxed = true)
     private val transactions: TransactionProvider = mockk()
-    private val metrics = AppMetrics(SimpleMeterRegistry())
+    private val registry = SimpleMeterRegistry()
+    private val metrics = AppMetrics(registry)
     init {
         every { providers.current() } returns provider
         every { provider.name } returns "meshy"
@@ -48,6 +49,7 @@ class DispatchAndPublishTest {
             tasks.acknowledge(id, "external-id")
         }
         assertEquals(1.0, metrics.jobsDispatched.count())
+        assertEquals(1.0, registry.get("omni3d.workflow.items").tags("workflow", "generation_dispatch", "outcome", "completed").counter().count())
     }
 
     @Test
@@ -59,6 +61,7 @@ class DispatchAndPublishTest {
         verify { jobs.markFailed(id, "Generation provider could not accept the task") }
         verify(exactly = 0) { jobs.updateExternalTaskId(any(), any()) }
         assertEquals(1.0, metrics.jobsFailed.count())
+        assertEquals(1.0, registry.get("omni3d.workflow.items").tags("workflow", "generation_dispatch", "outcome", "uncertain").counter().count())
     }
 
     @Test
@@ -66,5 +69,15 @@ class DispatchAndPublishTest {
         every { tasks.reserve(any(), any()) } returns false
         service().execute(DispatchGenerationTaskCommand(UUID.randomUUID(), "one", "two"))
         verify(exactly = 0) { provider.startGeneration(any(), any(), any()) }
+        assertEquals(1.0, registry.get("omni3d.workflow.items").tags("workflow", "generation_dispatch", "outcome", "ignored").counter().count())
+    }
+
+    @Test
+    fun `rate limited dispatch records a retry rather than a completed or failed job`() {
+        every { provider.startGeneration(any(), any(), any()) } throws GenerationProviderException(false, "rate limited", true, 60)
+        service().execute(DispatchGenerationTaskCommand(UUID.randomUUID(), "one", "two"))
+        assertEquals(1.0, registry.get("omni3d.workflow.items").tags("workflow", "generation_dispatch", "outcome", "retry_scheduled").counter().count())
+        assertEquals(0.0, metrics.jobsFailed.count())
+        assertEquals(0.0, metrics.jobsDispatched.count())
     }
 }

@@ -291,7 +291,7 @@ sum by (level) (
 **Type**: Logs panel  
 **LogQL:**
 ```logql
-{job="omni3d-backend", jobId="<paste-uuid-here>"}
+{job="omni3d-backend"} |= "jobId=<paste-uuid-here>"
 ```
 > Every log line emitted while that job was processing — from creation to GPU dispatch to completion.
 
@@ -299,7 +299,7 @@ sum by (level) (
 **Type**: Logs panel  
 **LogQL:**
 ```logql
-{job="omni3d-backend"} |= "auth rejected"
+{job="omni3d-backend"} |= "http_request" |= "status=401"
 ```
 
 #### Panel: Stripe Webhook Events
@@ -313,7 +313,7 @@ sum by (level) (
 **Type**: Logs panel  
 **LogQL:**
 ```logql
-{job="omni3d-backend"} |= "FAILED" | json | level="WARN"
+{job="omni3d-backend"} |~ "Generation dispatch failed|Generation completed.*FAILED|Generation reconciled.*FAILED"
 ```
 
 ---
@@ -350,5 +350,7 @@ Gives you full JVM, GC, thread pool, and HikariCP panels instantly.
 ## Tips
 
 - **Correlate logs + metrics**: Put a metric panel and a log panel side by side in Grafana. When you see a failure spike in the chart, filter logs by `jobId` to get the full trace.
-- **MDC jobId**: Every log line emitted during a job's lifecycle has `jobId` in the MDC context, so you can query `{job="omni3d-backend", jobId="<uuid>"}` in Loki to trace a single job end-to-end.
+- **MDC jobId**: Request and worker logs can be correlated with request IDs and job IDs in log content, so you can query `{job="omni3d-backend"} |= "jobId=<uuid>"` in Loki to trace a single job end-to-end.
 - **Tempo (optional)**: Grafana Cloud's free tier includes Tempo for distributed tracing. Add `micrometer-tracing-bridge-brave` later for trace-to-log correlation with zero extra infrastructure.
+
+See [coverage and queries](coverage.md) for operation, background workflow, backlog and request correlation metrics.

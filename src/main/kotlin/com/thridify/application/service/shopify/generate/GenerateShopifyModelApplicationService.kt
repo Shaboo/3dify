@@ -59,7 +59,7 @@ class GenerateShopifyModelApplicationService(private val sessions: ShopifySessio
         } finally {
             if (!retained) {
                 for (key in listOf(first, second)) {
-                    runCatching { deletion.deleteInput(key) }.onFailure { log.warn("Could not clean up an uncommitted Shopify upload", it) }
+                    runCatching { deletion.deleteInput(key) }.onFailure { log.warn("Could not clean up an uncommitted Shopify upload error_type={}", it.javaClass.simpleName) }
                 }
             }
         }

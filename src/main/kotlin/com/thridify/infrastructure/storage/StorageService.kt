@@ -33,11 +33,11 @@ class StorageService(
             )
             val url = "$endpoint/$bucket/$objectKey"
             metrics.storageUploads.increment()
-            log.debug("Upload complete [key={}, url={}]", objectKey, url)
+            log.debug("Upload complete [key={}]", objectKey)
             url
         } catch (ex: Exception) {
             metrics.storageUploadErrors.increment()
-            log.error("Upload failed [key={}]: {}", objectKey, ex.message, ex)
+            log.error("Upload failed [key={}] error_type={}", objectKey, ex.javaClass.simpleName)
             throw ex
         }
     }
@@ -60,7 +60,7 @@ class StorageService(
             url
         } catch (ex: Exception) {
             metrics.storageUploadErrors.increment()
-            log.error("Stream upload failed [key={}]: {}", objectKey, ex.message, ex)
+            log.error("Stream upload failed [key={}] error_type={}", objectKey, ex.javaClass.simpleName)
             throw ex
         }
     }

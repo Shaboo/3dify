@@ -28,6 +28,7 @@ class HandleGenerationCallbackApplicationService(
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: HandleGenerationCallbackCommand): GenerationCallbackResult {
         val id = command.jobId
+        val previousJobId = MDC.get("jobId")
         MDC.put("jobId", id.toString())
         try {
             var notification: JobNotification? = null
@@ -60,8 +61,13 @@ class HandleGenerationCallbackApplicationService(
                 }
                 true
             }
-            if (!accepted) return GenerationCallbackResult.TASK_MISMATCH
+            if (!accepted) {
+                metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_CALLBACK, AppMetrics.WorkflowOutcome.IGNORED)
+                log.warn("Generation callback rejected jobId={} reason=task_mismatch", id)
+                return GenerationCallbackResult.TASK_MISMATCH
+            }
             notification?.let {
+                log.info("Generation completed jobId={} status={}", id, it.status)
                 if (it.status == "SUCCESS") {
                     metrics.jobsCompleted.increment()
                     metrics.runpodCallbacks.increment()
@@ -72,9 +78,10 @@ class HandleGenerationCallbackApplicationService(
                 completedJob?.let { job -> metrics.recordJobDuration(System.currentTimeMillis() - job.createdAt.toInstant().toEpochMilli()) }
                 notifyCustomer(it)
             }
+            metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_CALLBACK, AppMetrics.WorkflowOutcome.ACCEPTED)
             return GenerationCallbackResult.ACCEPTED
         } finally {
-            MDC.remove("jobId")
+            if (previousJobId == null) MDC.remove("jobId") else MDC.put("jobId", previousJobId)
         }
     }
     private fun notifyCustomer(notification: JobNotification) {
@@ -83,10 +90,10 @@ class HandleGenerationCallbackApplicationService(
             val url = webhooks.findByUserId(userId)?.url ?: return
             client.deliver(url, notification)
             metrics.webhookDeliveriesSuccess.increment()
-            log.info("User webhook delivered [jobId={}, url={}]", notification.jobId, url)
+            log.info("User webhook delivered [jobId={}]", notification.jobId)
         } catch (ex: Exception) {
             metrics.webhookDeliveriesFailed.increment()
-            log.warn("User webhook delivery failed [jobId={}]: {}", notification.jobId, ex.message)
+            log.warn("User webhook delivery failed [jobId={}] error_type={}", notification.jobId, ex.javaClass.simpleName)
         }
     }
 }

@@ -53,7 +53,7 @@ class StripeBillingClient(@Value("\${stripe.webhook-secret}") private val webhoo
         val event = try {
             Webhook.constructEvent(payload, signature, webhookSecret)
         } catch (ex: Exception) {
-            log.warn("Stripe webhook signature verification failed: {}", ex.message)
+            log.warn("Stripe webhook signature verification failed error_type={}", ex.javaClass.simpleName)
             throw BadRequestException("Invalid Stripe signature")
         }
         log.info("Stripe event received [type={}]", event.type)

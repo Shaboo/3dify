@@ -32,6 +32,7 @@ class GenerateModelApplicationService(
         storage.upload(key2, command.image2.data, command.image2.contentType)
         return transactions.transaction {
             val id = UUID.randomUUID()
+            val previousJobId = MDC.get("jobId")
             MDC.put("jobId", id.toString())
             try {
                 jobs.insert(id, command.apiKeyId, key1, key2)
@@ -41,7 +42,7 @@ class GenerateModelApplicationService(
                 log.info("Job {} created and submitted for generation", id)
                 GenerateResult(id, "PENDING")
             } finally {
-                MDC.remove("jobId")
+                if (previousJobId == null) MDC.remove("jobId") else MDC.put("jobId", previousJobId)
             }
         }
     }

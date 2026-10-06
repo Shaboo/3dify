@@ -102,12 +102,12 @@ server:
 logging:
   level:
     root: INFO
-    com.thridify: DEBUG
+    com.thridify: ${APP_LOG_LEVEL:INFO}
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.jooq: WARN
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{jobId}%X{userId}%X{apiKeyId}] - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [requestId=%X{requestId} jobId=%X{jobId} userId=%X{userId} apiKeyId=%X{apiKeyId}] - %msg%n"
 
 # Shopify-facing UI and product merchandising belong to a separate app project.
 shopify:

@@ -15,6 +15,23 @@ import java.util.concurrent.TimeUnit
 @Component
 class AppMetrics(private val registry: MeterRegistry) {
 
+    enum class Workflow { GENERATION_DISPATCH, GENERATION_RECONCILIATION, SHOPIFY_RECONCILIATION, SHOPIFY_PRIVACY, GENERATION_CALLBACK, SHOPIFY_WEBHOOK }
+    enum class WorkflowOutcome { COMPLETED, PENDING, FAILED, IGNORED, ACCEPTED, RETRY_SCHEDULED, UNCERTAIN }
+
+    /** Per-item results for loops that deliberately catch errors and return normally. */
+    fun recordWorkflow(workflow: Workflow, outcome: WorkflowOutcome) {
+        Counter.builder("omni3d.workflow.items")
+            .description("Per-item workflow results, including errors caught inside background batches")
+            .tags("workflow", workflow.name.lowercase(), "outcome", outcome.name.lowercase())
+            .register(registry).increment()
+    }
+
+    fun recordJwtValidation(valid: Boolean) {
+        Counter.builder("omni3d.jwt.validations")
+            .description("JWT authentication token validations; omitted Authorization headers are not attempts")
+            .tag("result", if (valid) "valid" else "invalid").register(registry).increment()
+    }
+
     // ─── Users ──────────────────────────────────────────────────────────────
     val usersRegistered: Counter = Counter.builder("omni3d.users.registered")
         .description("Total number of successful user registrations")

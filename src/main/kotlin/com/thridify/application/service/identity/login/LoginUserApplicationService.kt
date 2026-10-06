@@ -30,7 +30,7 @@ class LoginUserApplicationService(
         }
         val token = tokens.generateToken(user.id, user.email)
         metrics.usersLoginSuccess.increment()
-        log.info("User logged in [userId={}, email={}]", user.id, user.email)
+        log.info("User logged in [userId={}]", user.id)
         return AuthResult(token, user.id, user.email, user.isAdmin)
     }
 }
