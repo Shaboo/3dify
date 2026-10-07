@@ -3,11 +3,9 @@ package com.thridify.infrastructure.shopify
 import com.thridify.domain.shopify.ShopifyBillingClient
 import com.thridify.domain.shopify.ShopifyBillingSnapshot
 import com.thridify.shared.exception.ApiException
-import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 
-@Component
-class ShopifyPartnerBillingClient(private val config: ShopifyProperties, private val http: ShopifyHttpClient) : ShopifyBillingClient {
+open class ShopifyPartnerBillingClient(private val config: ShopifyProperties, private val http: ShopifyHttpClient) : ShopifyBillingClient {
     private var nextRequestNanos = 0L
 
     @Synchronized

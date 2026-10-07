@@ -30,6 +30,8 @@ class GenerateShopifyModelApplicationService(private val sessions: ShopifySessio
             return GenerateResult(it.id, it.status)
         }
         providers.current().validateInputImages(command.imageIds?.size ?: command.images.size)
+        val observedAt = OffsetDateTime.now()
+        val snapshot = billing.currentSubscription(store.shopId)
         val product = command.productId?.let { products.product(session, command.idToken, it, true) }
         val inputs = if (command.imageIds != null) {
             productPolicy.imageIds(command.imageIds)
@@ -41,8 +43,6 @@ class GenerateShopifyModelApplicationService(private val sessions: ShopifySessio
         images.ensureImagesPresent(inputs.map { it.data.size })
         inputs.forEach { access.image(it.data.size, it.contentType) }
         if (product != null) products.prepareBackground(store, command.idToken)
-        val observedAt = OffsetDateTime.now()
-        val snapshot = billing.currentSubscription(store.shopId)
         val previous = transactions.transaction {
             generations.lock(store)
             generations.findRequest(store.billingScopeId, command.requestId).also {

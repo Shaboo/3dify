@@ -23,10 +23,19 @@ shopify.partner-org-id=
 shopify.partner-access-token=
 shopify.jobs-enabled=true
 
+# Optional billing bypass, only with the explicit local Spring profile.
+# The 3dify Local run configuration activates that profile. Real billing is the default.
+shopify.billing-mode=shopify
+# For local-test mode, set both values from your verified development store.
+shopify.local-test-shop-id=
+shopify.local-test-shop-domain=
+shopify.local-test-generation-limit=10
+
 # Fill these in to test actual model generation and storage.
 generation.provider=meshy
 generation.meshy.enabled=false
 generation.meshy.api-key=
+generation.meshy.request-timeout-seconds=120
 generation.polling-enabled=false
 omni3d.r2.endpoint=
 omni3d.r2.access-key=

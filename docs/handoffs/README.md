@@ -1,5 +1,5 @@
 # Session handoffs
 
-Read [the latest handoff](2026-10-05-meshy-integration.md) first. It builds on [backend hardening and Shopify app work](2026-10-05-hardening-and-app.md).
+Read [the current backend handover](2026-10-07-session.md) and [project memory](../MEMORY.md). Older handovers were removed at the user’s request.
 
-The backend lives in `~/Documents/3dify`; the Shopify merchant app lives in `~/Documents/3dify-shopify`, with its own `docs/HANDOFF.md`. These files are repository context, not automatic model memory.
+Related handovers: standalone website `../3dify-fe/docs/HANDOFF.md` and Shopify app `../3dify-shopify/docs/HANDOFF.md` (paths relative to the backend repository root). All three repositories use `main`.

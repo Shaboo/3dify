@@ -5,6 +5,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.thridify.domain.generation.GenerationProviderClient
 import com.thridify.domain.generation.GenerationProviderException
 import com.thridify.domain.generation.GenerationProviderResult
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -15,11 +16,15 @@ import java.util.UUID
 
 @Component
 class MeshyClient(private val config: MeshyProperties, private val inputs: MeshyInputImages, http: RestClient? = null) : GenerationProviderClient {
+    private val log = LoggerFactory.getLogger(javaClass)
+    init {
+        require(config.requestTimeoutSeconds > 0) { "Meshy request timeout must be positive" }
+    }
     override val name = "meshy"
     override val maxInputImages = 4
     private val mapper = jacksonObjectMapper()
     private val client = http ?: RestClient.builder().requestFactory(
-        org.springframework.http.client.JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()).apply { setReadTimeout(Duration.ofSeconds(30)) },
+        org.springframework.http.client.JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()).apply { setReadTimeout(Duration.ofSeconds(config.requestTimeoutSeconds)) },
     ).build()
     private var nextRequestNanos = 0L
     private var providerBlockedUntilNanos = 0L
@@ -102,11 +107,16 @@ class MeshyClient(private val config: MeshyProperties, private val inputs: Meshy
         } catch (ex: RestClientResponseException) {
             val retryAfter = retrySeconds(ex.responseHeaders?.getFirst("Retry-After"))
             if (ex.statusCode.value() == 429) providerBlockedUntilNanos = System.nanoTime() + retryAfter * 1_000_000_000
+            log.warn("Meshy request rejected operation={} http_status={}", if (submission) "submission" else "task", ex.statusCode.value())
             throw MeshyHttpException(ex.statusCode.value(), submission && ex.statusCode.value() >= 500, retryAfter)
         } catch (ex: GenerationProviderException) {
             throw ex
-        } catch (_: Exception) {
-            throw GenerationProviderException(submission, "Generation provider is temporarily unavailable")
+        } catch (ex: Exception) {
+            val causes = generateSequence<Throwable>(ex) { it.cause }.take(10).toList()
+            val timedOut = causes.any { it is java.net.http.HttpTimeoutException || it is java.net.SocketTimeoutException }
+            // Do not log exception messages, request bodies, signed URLs or API credentials.
+            log.warn("Meshy request failed operation={} timeout={} error_type={} cause_type={}", if (submission) "submission" else "task", timedOut, ex.javaClass.simpleName, causes.last().javaClass.simpleName)
+            throw GenerationProviderException(submission, if (timedOut) "Generation provider request timed out" else "Generation provider is temporarily unavailable")
         }
     }
     private fun readResponse(response: ResponseEntity<String>): JsonNode? {

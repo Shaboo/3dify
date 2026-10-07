@@ -4,7 +4,7 @@
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <option name="MAIN_CLASS_NAME" value="com.thridify.ThridifyApplicationKt" />
     <module name="thridify.main" />
-    <option name="PROGRAM_PARAMETERS" value="--spring.config.additional-location=file:./config/application-local.properties" />
+    <option name="PROGRAM_PARAMETERS" value="--spring.profiles.active=local --spring.config.additional-location=file:./config/application-local.properties" />
     <method v="2">
       <option name="Gradle.BeforeRunTask" enabled="true" tasks="startLocalInfrastructure" externalProjectPath="$PROJECT_DIR$" vmOptions="" scriptParameters="" />
       <option name="Make" enabled="true" />

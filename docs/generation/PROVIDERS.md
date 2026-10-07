@@ -23,6 +23,8 @@ Configure the existing database/RabbitMQ and Shopify settings as described in th
 
 Input objects stay private in R2. The adapter reads them and sends inline data URIs to Meshy. PNG/JPEG are preserved and WebP is converted to PNG. Input limits are 20 MiB per object and 32 million pixels. The default adapter request interval is 500 milliseconds; tune `generation.meshy.request-interval-ms` to account limits and deployment concurrency. Pacing is per process, not a distributed rate limiter. HTTP 429 and Retry-After are handled conservatively through persisted submission retries and polling.
 
+Configure `generation.meshy.request-timeout-seconds` for image submission and task requests (default 120 seconds). Base64 inputs increase request size; large photo submissions can exceed short timeouts. Transport logs report exception class and timeout detection, and HTTP rejection logs report status only. Credentials, upstream bodies and signed URLs are not logged. A timed-out submission remains uncertain and is never automatically resubmitted.
+
 Meshy temporary output URLs are downloaded to owned R2 keys `outputs/<jobId>/model.glb` and `model.usdz` before SUCCESS is published. Downloads allow only configured HTTPS asset hosts, reject redirects and have bounded size/time. Default Meshy host: `assets.meshy.ai`. Each asset is limited to 500 MiB. Set output storage CORS for the merchant app. Standard Meshy assets expire after three days, so keep polling healthy and alert on stuck PROCESSING jobs.
 
 ## Durable lifecycle and recovery

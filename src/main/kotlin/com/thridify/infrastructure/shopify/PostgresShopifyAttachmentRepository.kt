@@ -16,7 +16,11 @@ class PostgresShopifyAttachmentRepository(private val dsl: DSLContext) : Shopify
     }
     override fun claimDue(limit: Int): List<ShopifyAttachmentTask> {
         dsl.execute(
-            """UPDATE shopify_model_attachments a SET status = 'canceled', error_message = 'Generation failed or the app was disconnected', lease_id = NULL, lease_until = NULL, updated_at = now()
+            """UPDATE shopify_model_attachments a SET status = 'canceled',
+            error_message = CASE WHEN j.status = 'FAILED' THEN 'Generation failed; no model is available to attach'
+                WHEN c.status <> 'connected' THEN 'The Shopify app was disconnected from the store'
+                ELSE 'The Shopify app installation changed; attachment was canceled' END,
+            lease_id = NULL, lease_until = NULL, updated_at = now()
             FROM jobs j, platform_connections c WHERE j.id = a.job_id AND c.id = a.connection_id
             AND a.status IN ('waiting','retrying','checking','processing') AND (j.status = 'FAILED' OR c.status <> 'connected' OR c.installed_at <> a.installed_at)""",
         )

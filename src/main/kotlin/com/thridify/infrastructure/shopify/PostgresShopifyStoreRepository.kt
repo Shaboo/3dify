@@ -49,11 +49,17 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val al
             dsl.execute("UPDATE subscriptions SET status = 'canceled', updated_at = now() WHERE billing_scope_id = ? AND provider = 'shopify' AND status NOT IN ('canceled', 'expired', 'incomplete_expired')", store.billingScopeId)
             return inactive("canceled")
         }
-        if (snapshot.offerHandles.isEmpty()) return unmapped(store.billingScopeId)
-        val placeholders = snapshot.offerHandles.joinToString(",") { "?" }
-        val plans = dsl.fetch("SELECT DISTINCT p.* FROM plans p JOIN plan_offers o ON o.plan_id = p.id WHERE o.provider = 'shopify' AND o.billing_interval = ? AND p.is_active AND o.external_offer_id IN ($placeholders)", *arrayOf<Any>(snapshot.interval, *snapshot.offerHandles.toTypedArray()))
-        if (plans.size != 1) return unmapped(store.billingScopeId)
-        val plan = plans.single()
+        val plan = if (snapshot.localTestGenerationLimit != null) {
+            // Internal, inactive plan: never exposed as a purchasable offer or mapped to Shopify handles.
+            dsl.execute("INSERT INTO plans (name, display_name, monthly_quota, is_active) VALUES ('shopify-local-test', 'Local Shopify testing', ?, false) ON CONFLICT (name) DO NOTHING", snapshot.localTestGenerationLimit)
+            dsl.fetchOne("SELECT * FROM plans WHERE name = 'shopify-local-test'")!!
+        } else {
+            if (snapshot.offerHandles.isEmpty()) return unmapped(store.billingScopeId)
+            val placeholders = snapshot.offerHandles.joinToString(",") { "?" }
+            val plans = dsl.fetch("SELECT DISTINCT p.* FROM plans p JOIN plan_offers o ON o.plan_id = p.id WHERE o.provider = 'shopify' AND o.billing_interval = ? AND p.is_active AND o.external_offer_id IN ($placeholders)", *arrayOf<Any>(snapshot.interval, *snapshot.offerHandles.toTypedArray()))
+            if (plans.size != 1) return unmapped(store.billingScopeId)
+            plans.single()
+        }
         val planId = plan.get("id", UUID::class.java)!!
         val previous = dsl.fetchOne("SELECT * FROM subscriptions WHERE billing_scope_id = ? AND status NOT IN ('canceled', 'expired', 'incomplete_expired')", store.billingScopeId)
         val start = snapshot.periodStart ?: previous?.takeIf { it.get("current_period_end", OffsetDateTime::class.java)?.isEqual(snapshot.periodEnd) == true }?.get("current_period_start", OffsetDateTime::class.java) ?: observedAt
@@ -77,7 +83,7 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val al
             store.billingScopeId,
             Timestamp.from(allowance.start.toInstant()),
             Timestamp.from(allowance.end.toInstant()),
-            plan.get("monthly_quota", Int::class.java),
+            snapshot.localTestGenerationLimit ?: plan.get("monthly_quota", Int::class.java),
         )
         return entitlement(store.billingScopeId)
     }

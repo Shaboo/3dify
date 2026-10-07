@@ -121,6 +121,28 @@ class MeshyClientTest {
     }
 
     @Test
+    fun `submission timeout keeps ambiguous state and sanitized diagnostics without retries`() {
+        server.expect(requestTo("https://api.meshy.ai/openapi/v1/image-to-3d"))
+            .andRespond { throw org.springframework.web.client.ResourceAccessException("sensitive request body and token", java.net.http.HttpTimeoutException("sensitive URL")) }
+        val error = assertThrows<GenerationProviderException> { client.startGeneration(UUID.randomUUID(), "one", null) }
+        assertTrue(error.ambiguous)
+        assertEquals(false, error.retryable)
+        assertEquals("Generation provider request timed out", error.message)
+        server.verify()
+    }
+
+    @Test
+    fun `non-timeout transport failure remains ambiguous and does not disclose upstream details`() {
+        server.expect(requestTo("https://api.meshy.ai/openapi/v1/image-to-3d"))
+            .andRespond { throw org.springframework.web.client.ResourceAccessException("sensitive token", java.io.IOException("sensitive URL")) }
+        val error = assertThrows<GenerationProviderException> { client.startGeneration(UUID.randomUUID(), "one", null) }
+        assertTrue(error.ambiguous)
+        assertEquals(false, error.retryable)
+        assertEquals("Generation provider is temporarily unavailable", error.message)
+        server.verify()
+    }
+
+    @Test
     fun `privacy deletion is idempotent for expired tasks and retries in-progress conflicts`() {
         server.expect(requestTo("https://api.meshy.ai/openapi/v1/image-to-3d/task"))
             .andExpect(method(HttpMethod.DELETE)).andRespond(withStatus(HttpStatus.NOT_FOUND))

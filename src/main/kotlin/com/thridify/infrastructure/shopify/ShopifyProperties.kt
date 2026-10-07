@@ -15,6 +15,10 @@ data class ShopifyProperties(
     var partnerRequestIntervalMs: Long = 300,
     var apiVersion: String = "2026-07",
     var frontendOrigins: List<String> = emptyList(),
+    var billingMode: String = "shopify",
+    var localTestShopId: String = "",
+    var localTestShopDomain: String = "",
+    var localTestGenerationLimit: Int = 10,
 ) {
     fun requireEnabled() {
         if (!enabled || clientId.isBlank() || clientSecret.isBlank()) throw com.thridify.shared.exception.ApiException(503, "Shopify integration is not configured")

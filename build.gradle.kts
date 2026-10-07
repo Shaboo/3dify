@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.io.File
 
 buildscript {
     dependencies {
@@ -170,7 +171,19 @@ tasks.register<Exec>("startLocalInfrastructure") {
     description = "Start the local database, RabbitMQ and Redis before running from IntelliJ."
     group = "application"
     workingDir(projectDir)
-    commandLine("docker", "compose", "up", "-d", "--wait", "--wait-timeout", "60")
+    // IntelliJ launched from macOS Finder may not inherit the shell's Docker PATH.
+    val dockerCandidates =
+        System.getenv("PATH").orEmpty().split(File.pathSeparator).filter { it.isNotBlank() }
+            .map { File(it, "docker") } +
+            listOf(
+                File(System.getProperty("user.home"), ".docker/bin/docker"),
+                File("/Applications/Docker.app/Contents/Resources/bin/docker"),
+                File("/usr/local/bin/docker"),
+                File("/opt/homebrew/bin/docker"),
+            )
+    val dockerExecutable = dockerCandidates.firstOrNull { it.isFile && it.canExecute() }
+        ?: throw GradleException("Docker CLI not found. Install Docker Desktop and start it before running 3dify Local.")
+    commandLine(dockerExecutable.absolutePath, "compose", "up", "-d", "--wait", "--wait-timeout", "60")
 }
 
 // Uses the same test sources and inherited tag as the full suite.

@@ -38,7 +38,7 @@ class ShopifyController(private val connect: ConnectShopifyStoreApplicationServi
     @GetMapping("/subscription")
     fun subscription(@RequestHeader(value = "Authorization", defaultValue = "") authorization: String): ShopifySubscriptionResponse {
         val result = subscription.execute(GetShopifySubscriptionQuery(idToken(authorization)))
-        return ShopifySubscriptionResponse(result.status, result.planName, result.periodEnd, result.generationLimit, result.generationsConsumed, result.pricingUrl, result.allowancePeriodStart, result.allowancePeriodEnd)
+        return ShopifySubscriptionResponse(result.status, result.planName, result.periodEnd, result.generationLimit, result.generationsConsumed, result.pricingUrl, result.allowancePeriodStart, result.allowancePeriodEnd, result.localTesting)
     }
 
     @GetMapping("/generation-options")
@@ -74,7 +74,7 @@ class ShopifyController(private val connect: ConnectShopifyStoreApplicationServi
 }
 
 data class ShopifyConnectionResponse(val workspaceId: UUID, val connectionId: UUID, val billingScopeId: UUID, val shopDomain: String)
-data class ShopifySubscriptionResponse(val status: String, val planName: String?, val periodEnd: String?, val generationLimit: Int, val generationsConsumed: Int, val pricingUrl: String, val allowancePeriodStart: String?, val allowancePeriodEnd: String?)
+data class ShopifySubscriptionResponse(val status: String, val planName: String?, val periodEnd: String?, val generationLimit: Int, val generationsConsumed: Int, val pricingUrl: String, val allowancePeriodStart: String?, val allowancePeriodEnd: String?, val localTesting: Boolean)
 data class ShopifyModelsResponse(val models: List<JobResponse>, val nextCursor: UUID?)
 
 data class ShopifyGenerationOptionsResponse(val provider: String, val minImages: Int, val maxImages: Int?)

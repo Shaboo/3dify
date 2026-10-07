@@ -310,6 +310,18 @@ class ShopifyBackendTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `failed generation cancels attachment without suggesting the installed app disconnected`() {
+        connect()
+        val id = productGeneration()
+        jobs.markFailed(id, "Generation provider could not accept the task")
+        attach.execute()
+        assertEquals("canceled", attachmentStatus(id))
+        val message = dsl.fetchOne("SELECT error_message FROM shopify_model_attachments WHERE job_id = ?", id)!!.get("error_message", String::class.java)
+        assertEquals("Generation failed; no model is available to attach", message)
+        verify(exactly = 0) { products.attachModel(any(), any(), id, any()) }
+    }
+
+    @Test
     fun `uninstall cancels attachment and deletes offline credentials before the worker can run`() {
         connect()
         val id = productGeneration()
