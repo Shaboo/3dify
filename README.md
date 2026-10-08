@@ -88,3 +88,5 @@ Plan prices are immutable after creation, matching the fixed billing offer. Crea
 Direct API and dashboard job lists return at most 50 jobs. Pass `?before=<last-job-id>` for the next page; arrays remain compatible, ordered by creation time then ID descending.
 
 Direct generation consumes allowance atomically per billing scope. Free allowance resets at UTC calendar-month boundaries; paid allowance follows the confirmed monthly Stripe period. Repeated free activation does not reset consumption. Failed generation still consumes its accepted job allowance.
+
+Send a stable UUID `Idempotency-Key` on direct generation requests and reuse it when retrying. Matching retries return the original job without another charge; reusing a key with different photos returns 409. Legacy requests without this header remain one new job per POST and must not be automatically retried.

@@ -30,21 +30,37 @@ class GenerateModelApplicationService(
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: GenerateModelCommand): GenerateResult {
         policy.ensureImagesPresent(command.images.map { it.data.size })
+        val fingerprint = policy.requestFingerprint(command.images.map { it.data to it.contentType })
+        val previous = transactions.transaction {
+            val account = direct.lockAccount(command.apiKeyId)
+            allowances.allowance(account, java.time.OffsetDateTime.now())
+            direct.findRequest(requireNotNull(account).scopeId, command.requestId)
+        }
+        previous?.let {
+            policy.ensureSameRequest(it, command.apiKeyId, fingerprint)
+            return GenerateResult(it.jobId, it.status)
+        }
         providers.current().validateInputImages(command.images.size)
         val keys = command.images.map { policy.inputKey(it.filename) }
         transactions.transaction { pending.record(keys) }
+        val id = UUID.randomUUID()
         var committed = false
         try {
             command.images.zip(keys).forEach { (image, key) -> storage.upload(key, image.data, image.contentType) }
             val result = transactions.transaction {
                 val account = direct.lockAccount(command.apiKeyId)
                 val allowance = allowances.allowance(account, java.time.OffsetDateTime.now())
+                val duplicate = direct.findRequest(requireNotNull(account).scopeId, command.requestId)
+                if (duplicate != null) {
+                    policy.ensureSameRequest(duplicate, command.apiKeyId, fingerprint)
+                    return@transaction GenerateResult(duplicate.jobId, duplicate.status)
+                }
                 allowances.ensureConsumed(direct.consume(requireNotNull(account).scopeId, allowance))
-                val id = UUID.randomUUID()
                 val previousJobId = MDC.get("jobId")
                 MDC.put("jobId", id.toString())
                 try {
                     jobs.insert(id, command.apiKeyId, keys)
+                    direct.bindRequest(id, command.requestId, fingerprint)
                     history.insert(id, "PENDING", "Job created")
                     publisher.publish(id, keys)
                     pending.release(keys)
@@ -55,7 +71,7 @@ class GenerateModelApplicationService(
                     if (previousJobId == null) MDC.remove("jobId") else MDC.put("jobId", previousJobId)
                 }
             }
-            committed = true
+            committed = result.jobId == id
             return result
         } finally {
             if (!committed) {

@@ -5,6 +5,8 @@ import java.util.UUID
 
 interface DirectGenerationRepository {
     fun lockAccount(apiKeyId: UUID): DirectGenerationAccount?
+    fun findRequest(scopeId: UUID, requestId: UUID): DirectGenerationRequest?
+    fun bindRequest(jobId: UUID, requestId: UUID, fingerprint: String)
     fun consume(scopeId: UUID, allowance: DirectGenerationAllowance): Boolean
 }
 
@@ -14,3 +16,5 @@ data class DirectGenerationAllowance(val start: OffsetDateTime, val end: OffsetD
         require(end.isAfter(start) && limit >= 0)
     }
 }
+
+data class DirectGenerationRequest(val jobId: UUID, val apiKeyId: UUID?, val status: String, val fingerprint: String?)

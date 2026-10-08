@@ -139,7 +139,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         val input = command()
         dsl.execute("UPDATE plans SET monthly_quota = 1 WHERE name = 'free'")
         service().execute(input)
-        val ex = assertThrows<com.thridify.shared.exception.ApiException> { service().execute(input) }
+        val ex = assertThrows<com.thridify.shared.exception.ApiException> { service().execute(input.copy(requestId = UUID.randomUUID())) }
         assertEquals(429, ex.statusCode)
         assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("jobs")))
         assertEquals(1, dsl.fetchOne("SELECT generations_consumed FROM usage_periods")!!.get("generations_consumed", Int::class.java))
@@ -150,10 +150,37 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         val input = command()
         dsl.execute("UPDATE plans SET monthly_quota = 1 WHERE name = 'free'")
         java.util.concurrent.Executors.newFixedThreadPool(2).use { pool ->
-            val results = List(2) { pool.submit<Boolean> { runCatching { service().execute(input) }.isSuccess } }.map { it.get(20, java.util.concurrent.TimeUnit.SECONDS) }
+            val results = List(2) { pool.submit<Boolean> { runCatching { service().execute(input.copy(requestId = UUID.randomUUID())) }.isSuccess } }.map { it.get(20, java.util.concurrent.TimeUnit.SECONDS) }
             assertEquals(1, results.count { it })
         }
         assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("jobs")))
+    }
+
+    @Test
+    fun `repeated and concurrent idempotent requests create one job and spend one allowance`() {
+        val input = command()
+        val first = service().execute(input)
+        assertEquals(first, service().execute(input))
+        java.util.concurrent.Executors.newFixedThreadPool(2).use { pool ->
+            val futures = List(2) { pool.submit<UUID> { service().execute(input).jobId } }
+            futures.forEach { assertEquals(first.jobId, it.get(20, java.util.concurrent.TimeUnit.SECONDS)) }
+        }
+        assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("jobs")))
+        assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("outbox_messages")))
+        assertEquals(1, dsl.fetchOne("SELECT generations_consumed FROM usage_periods")!!.get("generations_consumed", Int::class.java))
+        assertThrows<com.thridify.shared.exception.ConflictException> { service().execute(input.copy(images = listOf(GenerationImage(byteArrayOf(9), "other.png", "image/png")))) }
+        verify(exactly = 2) { storage.upload(any(), any(), any()) }
+    }
+
+    @Test
+    fun `simultaneous new requests with the same key are deduplicated before allowance consumption`() {
+        val input = command()
+        java.util.concurrent.Executors.newFixedThreadPool(2).use { pool ->
+            val futures = List(2) { pool.submit<UUID> { service().execute(input).jobId } }
+            assertEquals(1, futures.map { it.get(20, java.util.concurrent.TimeUnit.SECONDS) }.distinct().size)
+        }
+        assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("jobs")))
+        assertEquals(0, dsl.fetchCount(org.jooq.impl.DSL.table("pending_input_uploads")))
     }
 
     @Test

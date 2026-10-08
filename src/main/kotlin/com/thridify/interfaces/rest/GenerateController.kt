@@ -33,10 +33,11 @@ class GenerateController(
     @ResponseStatus(HttpStatus.ACCEPTED)
     fun generate(
         authentication: Authentication,
+        @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key", required = false) requestId: UUID?,
         @RequestPart("images", required = false) images: List<MultipartFile>?,
         @RequestPart("image1", required = false) image1: MultipartFile?,
         @RequestPart("image2", required = false) image2: MultipartFile?,
-    ) = generate.execute(GenerateModelCommand(UUID.fromString(authentication.principal as String), com.thridify.interfaces.rest.dto.generationImages(images, image1, image2))).toResponse()
+    ) = generate.execute(GenerateModelCommand(UUID.fromString(authentication.principal as String), com.thridify.interfaces.rest.dto.generationImages(images, image1, image2), requestId ?: UUID.randomUUID())).toResponse()
 
     @GetMapping("/jobs")
     fun listJobs(authentication: Authentication, @org.springframework.web.bind.annotation.RequestParam(required = false) before: UUID?) = listJobs.execute(ListApiKeyJobsQuery(UUID.fromString(authentication.principal as String), before)).map { it.toResponse() }

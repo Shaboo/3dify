@@ -134,6 +134,18 @@ class GenerateControllerTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `the HTTP idempotency key returns the original job for repeated uploads`() {
+        val key = createTestUserAndApiKey()
+        val requestId = UUID.randomUUID()
+        val ids = List(2) {
+            val response = mockMvc.perform(multipart("/api/v1/generate").file(MockMultipartFile("images", "front.png", "image/png", byteArrayOf(1))).header("X-API-KEY", key).header("Idempotency-Key", requestId))
+                .andExpect(status().isAccepted).andReturn()
+            objectMapper.readTree(response.response.contentAsString).path("jobId").asText()
+        }
+        kotlin.test.assertEquals(1, ids.distinct().size)
+    }
+
+    @Test
     fun `generate fails without Authorization header`() {
         val image1 = MockMultipartFile("image1", "test1.png", "image/png", "dummy1".toByteArray())
         val image2 = MockMultipartFile("image2", "test2.png", "image/png", "dummy2".toByteArray())

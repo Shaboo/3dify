@@ -18,6 +18,19 @@ class GenerationPolicy {
     fun ensureImagesPresent(sizes: List<Int>) {
         if (sizes.isEmpty() || sizes.any { it == 0 }) throw BadRequestException("At least one non-empty photo is required")
     }
+    fun requestFingerprint(inputs: List<Pair<ByteArray, String>>): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        for ((bytes, type) in inputs) {
+            val mime = type.toByteArray(Charsets.UTF_8)
+            digest.update(java.nio.ByteBuffer.allocate(8).putInt(bytes.size).putInt(mime.size).array())
+            digest.update(bytes)
+            digest.update(mime)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+    fun ensureSameRequest(previous: DirectGenerationRequest, apiKeyId: UUID, fingerprint: String) {
+        if (previous.apiKeyId != apiKeyId || previous.fingerprint != fingerprint) throw com.thridify.shared.exception.ConflictException("Idempotency key already belongs to a different generation request")
+    }
     fun cleanupBefore(now: java.time.OffsetDateTime) = now.minusDays(1)
     fun inputKey(filename: String?) = "inputs/${UUID.randomUUID()}_$filename"
     fun matchesTask(actualJobId: UUID?, expectedJobId: UUID) = actualJobId == expectedJobId

@@ -158,3 +158,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 18: Direct job lists use owner-scoped 50-row cursor pages with stable timestamp/ID ordering and compatible array responses.
 - Finding 15: Uploads have durable pending records before storage writes, immediate failure cleanup, and daily-age retry cleanup; checked transaction failures also roll back to protect committed input ownership.
 - Finding 7: Direct generation atomically consumes scope-level monthly allowance with job/outbox writes; free periods use UTC months, paid periods use confirmed subscription bounds, with last-slot and concurrent-request regression tests.
+- Finding 14: Direct generation supports scope-scoped idempotency keys, payload fingerprints, and locked duplicate checks before consumption; concurrent/repeated requests share one job. Legacy clients must send the new header before retrying uncertain POSTs.
