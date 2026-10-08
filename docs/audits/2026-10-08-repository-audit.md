@@ -157,3 +157,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 10: Price-changing edits are rejected before any write; a new price requires a new plan, preserving existing billing offers and advertised prices.
 - Finding 18: Direct job lists use owner-scoped 50-row cursor pages with stable timestamp/ID ordering and compatible array responses.
 - Finding 15: Uploads have durable pending records before storage writes, immediate failure cleanup, and daily-age retry cleanup; checked transaction failures also roll back to protect committed input ownership.
+- Finding 7: Direct generation atomically consumes scope-level monthly allowance with job/outbox writes; free periods use UTC months, paid periods use confirmed subscription bounds, with last-slot and concurrent-request regression tests.

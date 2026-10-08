@@ -22,6 +22,8 @@ class GenerateModelApplicationService(
     private val transactions: TransactionProvider,
     private val policy: GenerationPolicy,
     private val metrics: AppMetrics,
+    private val direct: com.thridify.domain.generation.DirectGenerationRepository,
+    private val allowances: com.thridify.domain.generation.DirectGenerationAllowancePolicy,
     private val pending: com.thridify.domain.generation.PendingInputRepository,
     private val providers: com.thridify.domain.generation.GenerationProviderRegistry,
 ) {
@@ -35,6 +37,9 @@ class GenerateModelApplicationService(
         try {
             command.images.zip(keys).forEach { (image, key) -> storage.upload(key, image.data, image.contentType) }
             val result = transactions.transaction {
+                val account = direct.lockAccount(command.apiKeyId)
+                val allowance = allowances.allowance(account, java.time.OffsetDateTime.now())
+                allowances.ensureConsumed(direct.consume(requireNotNull(account).scopeId, allowance))
                 val id = UUID.randomUUID()
                 val previousJobId = MDC.get("jobId")
                 MDC.put("jobId", id.toString())

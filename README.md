@@ -86,3 +86,5 @@ JWT signing requires `JWT_SECRET` (at least 32 bytes) outside the explicit `loca
 Plan prices are immutable after creation, matching the fixed billing offer. Create a new plan for a different price; display text and allowances remain editable.
 
 Direct API and dashboard job lists return at most 50 jobs. Pass `?before=<last-job-id>` for the next page; arrays remain compatible, ordered by creation time then ID descending.
+
+Direct generation consumes allowance atomically per billing scope. Free allowance resets at UTC calendar-month boundaries; paid allowance follows the confirmed monthly Stripe period. Repeated free activation does not reset consumption. Failed generation still consumes its accepted job allowance.

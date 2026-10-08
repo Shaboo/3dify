@@ -153,22 +153,9 @@ class GenerateControllerTest : IntegrationTestBase() {
         val image1 = MockMultipartFile("image1", "test1.png", "image/png", "dummy1".toByteArray())
         val image2 = MockMultipartFile("image2", "test2.png", "image/png", "dummy2".toByteArray())
 
-        // Exhaust the rate limit (60 requests)
-        for (i in 1..60) {
-            mockMvc.perform(
-                multipart("/api/v1/generate")
-                    .file(image1)
-                    .file(image2)
-                    .header("X-API-KEY", apiKey),
-            ).andExpect(status().isAccepted)
+        repeat(60) {
+            mockMvc.get("/api/v1/jobs") { header("X-API-KEY", apiKey) }.andExpect { status { isOk() } }
         }
-
-        // The 61st request should be rejected
-        mockMvc.perform(
-            multipart("/api/v1/generate")
-                .file(image1)
-                .file(image2)
-                .header("X-API-KEY", apiKey),
-        ).andExpect(status().isTooManyRequests)
+        mockMvc.get("/api/v1/jobs") { header("X-API-KEY", apiKey) }.andExpect { status { isTooManyRequests() } }
     }
 }

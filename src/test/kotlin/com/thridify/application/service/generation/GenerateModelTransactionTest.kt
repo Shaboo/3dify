@@ -23,6 +23,8 @@ import java.util.UUID
 import kotlin.test.assertEquals
 
 class GenerateModelTransactionTest : IntegrationTestBase() {
+    @Autowired private lateinit var direct: com.thridify.domain.generation.DirectGenerationRepository
+
     @Autowired private lateinit var pending: com.thridify.domain.generation.PendingInputRepository
 
     @Autowired private lateinit var providers: com.thridify.domain.generation.GenerationProviderRegistry
@@ -52,6 +54,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         dsl.execute("INSERT INTO users (id,email,password_hash) VALUES (?, 'rollback@example.com', 'hash')", user)
         createDirectWorkspace(user)
         dsl.execute("INSERT INTO api_keys (id,workspace_id,billing_scope_id,created_by_user_id,plan_id,key_hash,key_prefix) SELECT ?,?,?,?,id,'hash','prefix' FROM plans WHERE name='free'", key, workspaceId(user), scopeId(user), user)
+        dsl.execute("INSERT INTO subscriptions(billing_scope_id,plan_id,provider,status) SELECT ?,id,'internal','active' FROM plans WHERE name='free'", scopeId(user))
         return key
     }
 
@@ -61,7 +64,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         GenerationImage(byteArrayOf(2), "second.png", "image/png"),
     )
 
-    private fun service(taskPublisher: GenerationTaskPublisher = publisher, registry: com.thridify.domain.generation.GenerationProviderRegistry = providers) = GenerateModelApplicationService(storage, jobs, history, taskPublisher, transactions, GenerationPolicy(), metrics, pending, registry)
+    private fun service(taskPublisher: GenerationTaskPublisher = publisher, registry: com.thridify.domain.generation.GenerationProviderRegistry = providers) = GenerateModelApplicationService(storage, jobs, history, taskPublisher, transactions, GenerationPolicy(), metrics, direct, com.thridify.domain.generation.DirectGenerationAllowancePolicy(), pending, registry)
 
     @Test
     fun `backend persists and queues one hundred views for a provider without a ceiling`() {
@@ -129,6 +132,28 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         every { storage.delete(any()) } returns Unit
         com.thridify.application.service.generation.cleanup.CleanupGenerationInputsApplicationService(pending, storage, GenerationPolicy()).execute()
         assertEquals(0, dsl.fetchCount(org.jooq.impl.DSL.table("pending_input_uploads")))
+    }
+
+    @Test
+    fun `last monthly allowance succeeds and further generation has no committed writes`() {
+        val input = command()
+        dsl.execute("UPDATE plans SET monthly_quota = 1 WHERE name = 'free'")
+        service().execute(input)
+        val ex = assertThrows<com.thridify.shared.exception.ApiException> { service().execute(input) }
+        assertEquals(429, ex.statusCode)
+        assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("jobs")))
+        assertEquals(1, dsl.fetchOne("SELECT generations_consumed FROM usage_periods")!!.get("generations_consumed", Int::class.java))
+    }
+
+    @Test
+    fun `two concurrent generations cannot spend the same remaining allowance`() {
+        val input = command()
+        dsl.execute("UPDATE plans SET monthly_quota = 1 WHERE name = 'free'")
+        java.util.concurrent.Executors.newFixedThreadPool(2).use { pool ->
+            val results = List(2) { pool.submit<Boolean> { runCatching { service().execute(input) }.isSuccess } }.map { it.get(20, java.util.concurrent.TimeUnit.SECONDS) }
+            assertEquals(1, results.count { it })
+        }
+        assertEquals(1, dsl.fetchCount(org.jooq.impl.DSL.table("jobs")))
     }
 
     @Test
