@@ -6,5 +6,5 @@ import org.springframework.stereotype.Service
 
 @Service
 class ListApiKeyJobsApplicationService(private val jobs: JobRepository) {
-    fun execute(query: ListApiKeyJobsQuery) = jobs.findAllByApiKeyId(query.apiKeyId).map { it.toResult() }
+    fun execute(query: ListApiKeyJobsQuery) = jobs.findAllByApiKeyId(query.apiKeyId, query.before).map { it.toResult() }
 }

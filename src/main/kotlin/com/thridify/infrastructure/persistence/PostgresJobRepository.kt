@@ -121,18 +121,22 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
 
     override fun findByExternalTaskId(externalTaskId: String): JobEntity? = dsl.select(*JOB_COLS).from(TABLE).where(J_EXTERNAL_TASK_ID.eq(externalTaskId)).fetchOne()?.let(::toEntity)
 
-    override fun findAllByApiKeyId(apiKeyId: UUID): List<JobEntity> = dsl.select(*JOB_COLS)
+    override fun findAllByApiKeyId(apiKeyId: UUID, before: UUID?): List<JobEntity> = dsl.select(*JOB_COLS)
         .from(TABLE)
         .where(J_API_KEY_ID.eq(apiKeyId))
-        .orderBy(J_CREATED_AT.desc())
+        .and(if (before == null) DSL.trueCondition() else DSL.condition("(jobs.created_at, jobs.id) < (SELECT created_at, id FROM jobs WHERE id = ? AND api_key_id = ?)", before, apiKeyId))
+        .orderBy(J_CREATED_AT.desc(), J_ID.desc())
+        .limit(50)
         .fetch()
         .map(::toEntity)
 
-    override fun findAllByUserId(userId: UUID): List<JobEntity> = dsl.select(*JOB_COLS)
+    override fun findAllByUserId(userId: UUID, before: UUID?): List<JobEntity> = dsl.select(*JOB_COLS)
         .from(TABLE)
         .join(API_KEYS).on(J_API_KEY_ID.eq(AK_ID))
         .where(AK_USER_ID.eq(userId))
-        .orderBy(J_CREATED_AT.desc())
+        .and(if (before == null) DSL.trueCondition() else DSL.condition("(jobs.created_at, jobs.id) < (SELECT j.created_at, j.id FROM jobs j JOIN api_keys a ON a.id = j.api_key_id WHERE j.id = ? AND a.created_by_user_id = ?)", before, userId))
+        .orderBy(J_CREATED_AT.desc(), J_ID.desc())
+        .limit(50)
         .fetch()
         .map(::toEntity)
 

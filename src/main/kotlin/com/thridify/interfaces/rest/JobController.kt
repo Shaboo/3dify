@@ -16,7 +16,7 @@ import java.util.UUID
 @RequestMapping("/dashboard/jobs")
 class JobController(private val listJobs: ListUserJobsApplicationService, private val history: GetJobHistoryApplicationService) {
     @GetMapping
-    fun listJobs(authentication: Authentication) = listJobs.execute(ListUserJobsQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
+    fun listJobs(authentication: Authentication, @org.springframework.web.bind.annotation.RequestParam(required = false) before: UUID?) = listJobs.execute(ListUserJobsQuery(UUID.fromString(authentication.principal as String), before)).map { it.toResponse() }
 
     @GetMapping("/{jobId}/history")
     fun getJobHistory(authentication: Authentication, @PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId, UUID.fromString(authentication.principal as String))).map { it.toResponse() }

@@ -18,7 +18,7 @@ interface JobRepository {
     fun findByApiKey(jobId: UUID, apiKeyId: UUID): JobEntity?
     fun findByUser(jobId: UUID, userId: UUID): JobEntity?
     fun findByExternalTaskId(externalTaskId: String): JobEntity?
-    fun findAllByApiKeyId(apiKeyId: UUID): List<JobEntity>
-    fun findAllByUserId(userId: UUID): List<JobEntity>
+    fun findAllByApiKeyId(apiKeyId: UUID, before: UUID? = null): List<JobEntity>
+    fun findAllByUserId(userId: UUID, before: UUID? = null): List<JobEntity>
     fun findUserIdByJobId(jobId: UUID): UUID?
 }

@@ -100,6 +100,30 @@ class JobControllerTest : IntegrationTestBase() {
         }
     }
 
+    @Test
+    fun `job lists have stable cursor pages even when timestamps tie`() {
+        val key = seedApiKey()
+        dsl.execute("INSERT INTO jobs(workspace_id,billing_scope_id,api_key_id,input_image_1,input_image_2,created_at) SELECT ?,?,?,'a','b','2026-01-01T00:00:00Z'::timestamptz FROM generate_series(1,51)", workspaceId(userId), scopeId(userId), key)
+        val first = mockMvc.get("/dashboard/jobs") { header("Authorization", bearerToken(token)) }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(50) }
+            }.andReturn()
+        val rows = objectMapper.readTree(first.response.contentAsString)
+        val cursor = rows.last().path("id").asText()
+        val second = mockMvc.get("/dashboard/jobs?before=$cursor") { header("Authorization", bearerToken(token)) }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(1) }
+            }.andReturn()
+        kotlin.test.assertFalse(rows.map { it.path("id").asText() }.contains(objectMapper.readTree(second.response.contentAsString).first().path("id").asText()))
+        mockMvc.get("/dashboard/jobs?before=${UUID.randomUUID()}") { header("Authorization", bearerToken(token)) }
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.length()") { value(0) }
+            }
+    }
+
     // -------- helpers --------
 
     private fun seedFreePlan() {

@@ -39,7 +39,7 @@ class GenerateController(
     ) = generate.execute(GenerateModelCommand(UUID.fromString(authentication.principal as String), com.thridify.interfaces.rest.dto.generationImages(images, image1, image2))).toResponse()
 
     @GetMapping("/jobs")
-    fun listJobs(authentication: Authentication) = listJobs.execute(ListApiKeyJobsQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
+    fun listJobs(authentication: Authentication, @org.springframework.web.bind.annotation.RequestParam(required = false) before: UUID?) = listJobs.execute(ListApiKeyJobsQuery(UUID.fromString(authentication.principal as String), before)).map { it.toResponse() }
 
     @GetMapping("/jobs/{jobId}")
     fun getJob(authentication: Authentication, @PathVariable jobId: UUID) = getJob.execute(GetJobQuery(jobId, UUID.fromString(authentication.principal as String))).toResponse()

@@ -84,3 +84,5 @@ Restart the backend to apply migrations. Real end-to-end generation still requir
 JWT signing requires `JWT_SECRET` (at least 32 bytes) outside the explicit `local` profile. The local profile supplies a development-only key; production refuses missing, placeholder, or development keys.
 
 Plan prices are immutable after creation, matching the fixed billing offer. Create a new plan for a different price; display text and allowances remain editable.
+
+Direct API and dashboard job lists return at most 50 jobs. Pass `?before=<last-job-id>` for the next page; arrays remain compatible, ordered by creation time then ID descending.
