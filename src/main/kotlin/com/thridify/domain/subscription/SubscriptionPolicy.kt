@@ -16,6 +16,7 @@ sealed interface CheckoutDecision {
 class SubscriptionPolicy {
     fun checkout(plan: PlanEntity?, id: UUID): CheckoutDecision {
         val found = plan ?: throw NotFoundException("Plan not found: $id")
+        if (!found.isActive) throw NotFoundException("Plan not found: $id")
         if (found.priceCents == 0) return CheckoutDecision.ActivateFree
         val priceId = found.stripePriceId
         if (priceId.isNullOrBlank()) throw BadRequestException("Plan is not linked to a Stripe price")

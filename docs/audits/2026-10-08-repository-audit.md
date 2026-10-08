@@ -152,3 +152,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 5: Removed subscription-driven key activation/deactivation; revocation stays permanent and subscription authorization remains the access gate.
 - Finding 6: Key creation checks subscription entitlement; request limits come from the subscription, including for legacy keys with a higher selected plan.
 - Finding 16: Domain credential validation rejects malformed/overlong emails, blank passwords, bcrypt-overlong UTF-8 passwords, and overlong names before persistence or hashing.
+- Finding 11: Domain policies reject checkout and new keys for deactivated plans; existing subscribed access is preserved.

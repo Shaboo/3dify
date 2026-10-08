@@ -66,6 +66,14 @@ class ApiKeyServiceTest {
     ) = ApiKeyAuthEntity(id = id, userId = userId, isActive = isActive, rateLimitRpm = rateLimitRpm)
 
     @Test
+    fun `deactivated plans cannot issue new keys`() {
+        every { planRepository.findByName("free") } returns plan().copy(isActive = false)
+        every { subscriptions.findActiveByUserId(any()) } returns null
+        assertThrows<NotFoundException> { create.execute(CreateApiKeyCommand(UUID.randomUUID(), null, "free")) }
+        verify(exactly = 0) { apiKeyRepository.insert(any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `generateKey returns raw key starting with omni_pk_`() {
         val planId = UUID.randomUUID()
         every { subscriptions.findActiveByUserId(any()) } returns null

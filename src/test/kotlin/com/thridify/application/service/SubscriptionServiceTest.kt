@@ -82,6 +82,17 @@ class SubscriptionServiceTest {
         sortOrder = 0,
     )
 
+    @Test
+    fun `deactivated free and paid plans cannot be checked out`() {
+        for (amount in listOf(0, 4900)) {
+            val selected = plan(priceCents = amount, stripePriceId = "price-old").copy(isActive = false)
+            every { planRepository.findById(selected.id) } returns selected
+            assertThrows<NotFoundException> { checkout.execute(CreateCheckoutSessionCommand(UUID.randomUUID(), selected.id, "http://s", "http://c")) }
+        }
+        verify { billing wasNot Called }
+        verify { subscriptionRepository wasNot Called }
+    }
+
     // -------- getStatus --------
 
     @Test
