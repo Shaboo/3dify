@@ -9,7 +9,7 @@ import org.springframework.transaction.support.TransactionTemplate
 class SpringTransactionProvider(manager: PlatformTransactionManager) : TransactionProvider {
     private val template = TransactionTemplate(manager)
     override fun <T> transaction(action: () -> T): T {
-        // Match Spring's previous default rollback rules, including checked exceptions.
+        // Failed use cases must not commit partial writes.
         var result: T? = null
         var checkedFailure: Exception? = null
         template.executeWithoutResult {
@@ -18,6 +18,7 @@ class SpringTransactionProvider(manager: PlatformTransactionManager) : Transacti
             } catch (ex: RuntimeException) {
                 throw ex
             } catch (ex: Exception) {
+                it.setRollbackOnly()
                 checkedFailure = ex
             }
         }

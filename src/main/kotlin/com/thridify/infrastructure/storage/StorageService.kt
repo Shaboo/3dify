@@ -20,6 +20,10 @@ class StorageService(
 ) : ImageStorage {
     private val log = LoggerFactory.getLogger(StorageService::class.java)
 
+    override fun delete(objectKey: String) {
+        s3Client.deleteObject(software.amazon.awssdk.services.s3.model.DeleteObjectRequest.builder().bucket(bucket).key(objectKey).build())
+    }
+
     override fun upload(objectKey: String, data: ByteArray, contentType: String): String {
         log.debug("Uploading to R2 [key={}, bytes={}]", objectKey, data.size)
         return try {

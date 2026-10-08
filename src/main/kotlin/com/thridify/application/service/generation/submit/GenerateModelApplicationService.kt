@@ -22,30 +22,44 @@ class GenerateModelApplicationService(
     private val transactions: TransactionProvider,
     private val policy: GenerationPolicy,
     private val metrics: AppMetrics,
+    private val pending: com.thridify.domain.generation.PendingInputRepository,
     private val providers: com.thridify.domain.generation.GenerationProviderRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: GenerateModelCommand): GenerateResult {
         policy.ensureImagesPresent(command.images.map { it.data.size })
         providers.current().validateInputImages(command.images.size)
-        val keys = command.images.map { image ->
-            val key = policy.inputKey(image.filename)
-            storage.upload(key, image.data, image.contentType)
-            key
-        }
-        return transactions.transaction {
-            val id = UUID.randomUUID()
-            val previousJobId = MDC.get("jobId")
-            MDC.put("jobId", id.toString())
-            try {
-                jobs.insert(id, command.apiKeyId, keys)
-                history.insert(id, "PENDING", "Job created")
-                publisher.publish(id, keys)
-                metrics.jobsCreated.increment()
-                log.info("Job {} created and submitted for generation image_count={}", id, command.images.size)
-                GenerateResult(id, "PENDING")
-            } finally {
-                if (previousJobId == null) MDC.remove("jobId") else MDC.put("jobId", previousJobId)
+        val keys = command.images.map { policy.inputKey(it.filename) }
+        transactions.transaction { pending.record(keys) }
+        var committed = false
+        try {
+            command.images.zip(keys).forEach { (image, key) -> storage.upload(key, image.data, image.contentType) }
+            val result = transactions.transaction {
+                val id = UUID.randomUUID()
+                val previousJobId = MDC.get("jobId")
+                MDC.put("jobId", id.toString())
+                try {
+                    jobs.insert(id, command.apiKeyId, keys)
+                    history.insert(id, "PENDING", "Job created")
+                    publisher.publish(id, keys)
+                    pending.release(keys)
+                    metrics.jobsCreated.increment()
+                    log.info("Job {} created and submitted for generation image_count={}", id, command.images.size)
+                    GenerateResult(id, "PENDING")
+                } finally {
+                    if (previousJobId == null) MDC.remove("jobId") else MDC.put("jobId", previousJobId)
+                }
+            }
+            committed = true
+            return result
+        } finally {
+            if (!committed) {
+                keys.forEach { key ->
+                    runCatching {
+                        storage.delete(key)
+                        pending.release(listOf(key))
+                    }.onFailure { log.warn("Uncommitted generation upload remains queued for cleanup error_type={}", it.javaClass.simpleName) }
+                }
             }
         }
     }

@@ -156,3 +156,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 8: Free activation locks the billing scope and refuses to replace a still-paid subscription; customers retain billing portal access until confirmed cancellation.
 - Finding 10: Price-changing edits are rejected before any write; a new price requires a new plan, preserving existing billing offers and advertised prices.
 - Finding 18: Direct job lists use owner-scoped 50-row cursor pages with stable timestamp/ID ordering and compatible array responses.
+- Finding 15: Uploads have durable pending records before storage writes, immediate failure cleanup, and daily-age retry cleanup; checked transaction failures also roll back to protect committed input ownership.

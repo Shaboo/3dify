@@ -30,6 +30,7 @@ abstract class IntegrationTestBase {
         dsl.execute(
             """
             TRUNCATE TABLE
+                pending_input_uploads,
                 shopify_webhook_receipts,
                 usage_periods,
                 subscriptions,

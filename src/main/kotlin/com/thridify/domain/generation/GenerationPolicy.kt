@@ -18,6 +18,7 @@ class GenerationPolicy {
     fun ensureImagesPresent(sizes: List<Int>) {
         if (sizes.isEmpty() || sizes.any { it == 0 }) throw BadRequestException("At least one non-empty photo is required")
     }
+    fun cleanupBefore(now: java.time.OffsetDateTime) = now.minusDays(1)
     fun inputKey(filename: String?) = "inputs/${UUID.randomUUID()}_$filename"
     fun matchesTask(actualJobId: UUID?, expectedJobId: UUID) = actualJobId == expectedJobId
     fun callbackOutcome(status: String, hasOutput: Boolean, glb: String?, usdz: String?): GenerationOutcome = when {

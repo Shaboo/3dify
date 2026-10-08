@@ -23,6 +23,8 @@ import java.util.UUID
 import kotlin.test.assertEquals
 
 class GenerateModelTransactionTest : IntegrationTestBase() {
+    @Autowired private lateinit var pending: com.thridify.domain.generation.PendingInputRepository
+
     @Autowired private lateinit var providers: com.thridify.domain.generation.GenerationProviderRegistry
 
     @Autowired private lateinit var jobs: JobRepository
@@ -40,6 +42,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
     fun setup() {
         resetDatabase()
         seedDefaultPlans()
+        every { storage.delete(any()) } returns Unit
         every { storage.upload(any(), any(), any()) } returns "stored"
     }
 
@@ -58,7 +61,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
         GenerationImage(byteArrayOf(2), "second.png", "image/png"),
     )
 
-    private fun service(taskPublisher: GenerationTaskPublisher = publisher, registry: com.thridify.domain.generation.GenerationProviderRegistry = providers) = GenerateModelApplicationService(storage, jobs, history, taskPublisher, transactions, GenerationPolicy(), metrics, registry)
+    private fun service(taskPublisher: GenerationTaskPublisher = publisher, registry: com.thridify.domain.generation.GenerationProviderRegistry = providers) = GenerateModelApplicationService(storage, jobs, history, taskPublisher, transactions, GenerationPolicy(), metrics, pending, registry)
 
     @Test
     fun `backend persists and queues one hundred views for a provider without a ceiling`() {
@@ -117,6 +120,18 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `failed cleanup remains durable and a later cleanup run removes it`() {
+        every { storage.upload(any(), any(), any()) } throws IllegalStateException("upload failure")
+        every { storage.delete(any()) } throws IllegalStateException("delete failure")
+        assertThrows<IllegalStateException> { service().execute(command()) }
+        assertEquals(2, dsl.fetchCount(org.jooq.impl.DSL.table("pending_input_uploads")))
+        dsl.execute("UPDATE pending_input_uploads SET created_at = now() - interval '2 days'")
+        every { storage.delete(any()) } returns Unit
+        com.thridify.application.service.generation.cleanup.CleanupGenerationInputsApplicationService(pending, storage, GenerationPolicy()).execute()
+        assertEquals(0, dsl.fetchCount(org.jooq.impl.DSL.table("pending_input_uploads")))
+    }
+
+    @Test
     fun `empty images fail before storage or job persistence`() {
         val command = command().let { it.copy(images = listOf(it.images[0], GenerationImage(byteArrayOf(), "empty.png", "image/png"))) }
         assertThrows<BadRequestException> { service().execute(command) }
@@ -124,7 +139,7 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
     }
 
     @Test
-    fun `transaction provider preserves the previous checked exception commit rule`() {
+    fun `transaction provider rolls back checked failures too`() {
         val id = UUID.randomUUID()
         assertThrows<java.io.IOException> {
             transactions.transaction {
@@ -132,6 +147,6 @@ class GenerateModelTransactionTest : IntegrationTestBase() {
                 throw java.io.IOException("checked failure")
             }
         }
-        assertEquals(1, dsl.fetchOne("SELECT count(*) AS total FROM users WHERE id=?", id)!!.get("total", Int::class.java))
+        assertEquals(0, dsl.fetchOne("SELECT count(*) AS total FROM users WHERE id=?", id)!!.get("total", Int::class.java))
     }
 }
