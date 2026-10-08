@@ -40,6 +40,12 @@ class UserServiceTest {
     ) = UserEntity(id = id, email = email, passwordHash = passwordHash, name = null, isAdmin = isAdmin)
 
     @Test
+    fun `internal registration cannot bypass credential validation`() {
+        assertThrows<com.thridify.shared.exception.BadRequestException> { register.execute(RegisterUserCommand("", "")) }
+        verify(exactly = 0) { userRepository.insert(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `register succeeds when email is unique`() {
         every { userRepository.existsByEmail("new@example.com") } returns false
         every { userRepository.insert(any(), "new@example.com", any(), "Alice") } returns Unit

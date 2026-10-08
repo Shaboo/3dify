@@ -58,6 +58,22 @@ class AuthControllerTest : IntegrationTestBase() {
         }.andExpect { status { isConflict() } }
     }
 
+    @Test
+    fun `invalid registration and login input is rejected without creating users`() {
+        val invalid = listOf(RegisterRequest("", "pass"), RegisterRequest("not-an-email", "pass"), RegisterRequest("a@example.com", ""), RegisterRequest("a@example.com", " "), RegisterRequest("a@example.com", "é".repeat(37)), RegisterRequest("a".repeat(256) + "@example.com", "pass"), RegisterRequest("a@example.com", "pass", "a".repeat(256)))
+        for (body in invalid) {
+            mockMvc.post("/auth/register") {
+                contentType = MediaType.APPLICATION_JSON
+                content = objectMapper.writeValueAsString(body)
+            }.andExpect { status { isBadRequest() } }
+        }
+        mockMvc.post("/auth/login") {
+            contentType = MediaType.APPLICATION_JSON
+            content = objectMapper.writeValueAsString(LoginRequest("a@example.com", "a".repeat(73)))
+        }.andExpect { status { isBadRequest() } }
+        kotlin.test.assertEquals(0, dsl.fetchCount(org.jooq.impl.DSL.table("users")))
+    }
+
     // -------- Login --------
 
     @Test

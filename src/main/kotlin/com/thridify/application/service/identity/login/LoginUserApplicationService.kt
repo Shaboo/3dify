@@ -20,6 +20,7 @@ class LoginUserApplicationService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: LoginUserCommand): AuthResult {
+        policy.credentials(command.email, command.password)
         val user = try {
             val found = policy.requireUser(users.findByEmail(command.email))
             policy.ensurePasswordMatches(passwords.matches(command.password, found.passwordHash))

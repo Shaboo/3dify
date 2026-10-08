@@ -21,6 +21,7 @@ class RegisterUserApplicationService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     fun execute(command: RegisterUserCommand): AuthResult {
+        policy.registration(command.email, command.password, command.name)
         policy.ensureEmailAvailable(users.existsByEmail(command.email))
         val id = UUID.randomUUID()
         val hash = passwords.encode(command.password)
