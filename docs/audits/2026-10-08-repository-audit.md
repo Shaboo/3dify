@@ -154,3 +154,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 16: Domain credential validation rejects malformed/overlong emails, blank passwords, bcrypt-overlong UTF-8 passwords, and overlong names before persistence or hashing.
 - Finding 11: Domain policies reject checkout and new keys for deactivated plans; existing subscribed access is preserved.
 - Finding 8: Free activation locks the billing scope and refuses to replace a still-paid subscription; customers retain billing portal access until confirmed cancellation.
+- Finding 10: Price-changing edits are rejected before any write; a new price requires a new plan, preserving existing billing offers and advertised prices.

@@ -82,3 +82,5 @@ API additions: authenticated `GET /shopify/api/products/{numericProductId}/image
 Restart the backend to apply migrations. Real end-to-end generation still requires configured Meshy credentials, owned model storage, generation polling, and a working Shopify billing subscription/offer mapping. Automated tests use mocked Shopify/GPU boundaries and Testcontainers PostgreSQL; no paid generation or live product mutation is performed during verification.
 
 JWT signing requires `JWT_SECRET` (at least 32 bytes) outside the explicit `local` profile. The local profile supplies a development-only key; production refuses missing, placeholder, or development keys.
+
+Plan prices are immutable after creation, matching the fixed billing offer. Create a new plan for a different price; display text and allowances remain editable.

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service
 class UpdatePlanApplicationService(private val plans: PlanRepository, private val policy: PlanPolicy) {
 
     fun execute(command: UpdatePlanCommand) = with(command) {
-        policy.requirePlan(plans.findById(id), id)
+        policy.ensurePriceUnchanged(policy.requirePlan(plans.findById(id), id), priceCents)
         plans.update(id, displayName, description, priceCents, rateLimitRpm, monthlyQuota, null, sortOrder)
         (plans.findById(id) ?: throw IllegalStateException("Plan not found after update")).toResult()
     }

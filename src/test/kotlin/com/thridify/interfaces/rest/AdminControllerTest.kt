@@ -112,7 +112,7 @@ class AdminControllerTest : IntegrationTestBase() {
         val update = UpdatePlanRequest(
             displayName = "Updated Name",
             description = "Updated desc",
-            priceCents = 4900,
+            priceCents = 1900,
             rateLimitRpm = 120,
             monthlyQuota = 500,
             sortOrder = 2,
@@ -125,8 +125,20 @@ class AdminControllerTest : IntegrationTestBase() {
         }.andExpect {
             status { isOk() }
             jsonPath("$.displayName") { value("Updated Name") }
-            jsonPath("$.priceCents") { value(4900) }
+            jsonPath("$.priceCents") { value(1900) }
         }
+    }
+
+    @Test
+    fun `changing a price is rejected without changing the advertised plan`() {
+        val planId = seedSinglePlan()
+        mockMvc.put("/admin/plans/$planId") {
+            header("Authorization", bearerToken(adminToken))
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"priceCents":4900,"displayName":"Wrong price"}"""
+        }.andExpect { status { isBadRequest() } }
+        kotlin.test.assertEquals(1900, dsl.fetchOne("SELECT price_cents FROM plans WHERE id = ?", planId)!!.get("price_cents", Int::class.java))
+        kotlin.test.assertEquals("Test Plan", dsl.fetchOne("SELECT display_name FROM plans WHERE id = ?", planId)!!.get("display_name", String::class.java))
     }
 
     // -------- DELETE /admin/plans/{id} --------
