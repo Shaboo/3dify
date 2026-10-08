@@ -148,3 +148,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 4: Relay forwards the full input list; regression cases cover 1, 3, 4, and 100 images through the actual relay and worker.
 - Finding 1: Job details and history require the authenticated owner/key; cross-customer regression covers all three routes.
 - Finding 3: JWT signing secrets are validated at startup; the development key is restricted to the sole local profile.
+- Finding 2: Webhooks require public HTTPS destinations; delivery pins checked DNS addresses, verifies TLS hostnames, rejects redirects, and bounds connection/read/status parsing.
