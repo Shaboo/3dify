@@ -1,6 +1,6 @@
 package com.thridify.application.service.generation.reconcile
 
-import com.thridify.domain.generation.CustomerWebhookClient
+import com.thridify.domain.generation.CustomerWebhookPublisher
 import com.thridify.domain.generation.GenerationOutputStorage
 import com.thridify.domain.generation.GenerationProviderException
 import com.thridify.domain.generation.GenerationProviderRegistry
@@ -25,7 +25,7 @@ class ReconcileGenerationTasksApplicationService(
     private val history: JobHistoryRepository,
     private val transactions: TransactionProvider,
     private val webhooks: WebhookRepository,
-    private val notifications: CustomerWebhookClient,
+    private val notifications: CustomerWebhookPublisher,
     private val metrics: AppMetrics,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -61,7 +61,9 @@ class ReconcileGenerationTasksApplicationService(
                         history.insert(task.jobId, status, if (retained != null) "Model outputs retained" else (result as GenerationProviderResult.Failed).message)
                         tasks.complete(task.jobId)
                         job?.let { durationMs = System.currentTimeMillis() - it.createdAt.toInstant().toEpochMilli() }
-                        JobNotification(task.jobId, status, retained?.glbUrl, retained?.usdzUrl)
+                        JobNotification(task.jobId, status, retained?.glbUrl, retained?.usdzUrl).also { notification ->
+                            jobs.findUserIdByJobId(task.jobId)?.let(webhooks::findByUserId)?.let { notifications.publish(it.url, notification) }
+                        }
                     }
                 }
                 if (removeOutputs) outputs.delete(task.jobId)
@@ -70,15 +72,6 @@ class ReconcileGenerationTasksApplicationService(
                     log.info("Generation reconciled jobId={} provider={} status={}", task.jobId, task.provider, notification.status)
                     durationMs?.let(metrics::recordJobDuration)
                     if (notification.status == "SUCCESS") metrics.jobsCompleted.increment() else metrics.jobsFailed.increment()
-                    try {
-                        jobs.findUserIdByJobId(task.jobId)?.let(webhooks::findByUserId)?.let {
-                            notifications.deliver(it.url, notification)
-                            metrics.webhookDeliveriesSuccess.increment()
-                        }
-                    } catch (ex: Exception) {
-                        metrics.webhookDeliveriesFailed.increment()
-                        log.warn("Customer generation notification remains undelivered for job {} error_type={}", task.jobId, ex.javaClass.simpleName)
-                    }
                 } else {
                     metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_RECONCILIATION, AppMetrics.WorkflowOutcome.IGNORED)
                 }

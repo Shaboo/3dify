@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service
 @Service
 class OutboxRelay(
     private val outbox: OutboxRepository,
-    private val delivery: GenerationTaskDelivery,
+    private val delivery: OutboxMessageDelivery,
     private val metrics: AppMetrics,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -19,6 +19,7 @@ class OutboxRelay(
                 metrics.outboxPublished.increment()
                 log.debug("Outbox message published [msgId={}, jobId={}]", message.id, jobId)
             } catch (ex: Exception) {
+                outbox.retryLater(message.id)
                 metrics.outboxFailed.increment()
                 log.error("Failed to publish outbox message [msgId={}] error_type={}", message.id, ex.javaClass.simpleName)
             }

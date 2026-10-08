@@ -2,6 +2,6 @@ package com.thridify.infrastructure.outbox
 
 import java.util.UUID
 
-interface GenerationTaskDelivery {
+interface OutboxMessageDelivery {
     fun deliver(message: OutboxMessageEntity): UUID
 }

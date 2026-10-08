@@ -162,3 +162,5 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 12: Publisher waits for correlated broker acknowledgement and rejects mandatory returns before marking outbox delivery; real RabbitMQ regression covers routing, unroutable messages, and missing exchanges.
 
 - Finding 9: Stripe receipts deduplicate events under the billing scope lock; older events cannot overwrite new state. Updates and failures retrieve current provider state, and stale checkouts cannot replace another live subscription. Provider reads occur outside database transactions.
+
+- Finding 13: Customer notification intents are written atomically with completion and delivered through the persistent outbox. HTTP failures stay pending with a one-minute retry delay. Receivers must deduplicate the stable X-3dify-Delivery-Id (job ID); delivery is at least once.

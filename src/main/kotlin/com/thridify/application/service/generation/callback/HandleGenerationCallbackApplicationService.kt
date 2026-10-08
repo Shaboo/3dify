@@ -1,6 +1,6 @@
 package com.thridify.application.service.generation.callback
 
-import com.thridify.domain.generation.CustomerWebhookClient
+import com.thridify.domain.generation.CustomerWebhookPublisher
 import com.thridify.domain.generation.GenerationOutcome
 import com.thridify.domain.generation.GenerationPolicy
 import com.thridify.domain.generation.GenerationProviderTaskRepository
@@ -19,7 +19,7 @@ class HandleGenerationCallbackApplicationService(
     private val jobs: JobRepository,
     private val history: JobHistoryRepository,
     private val webhooks: WebhookRepository,
-    private val client: CustomerWebhookClient,
+    private val client: CustomerWebhookPublisher,
     private val policy: GenerationPolicy,
     private val metrics: AppMetrics,
     private val tasks: GenerationProviderTaskRepository,
@@ -59,6 +59,7 @@ class HandleGenerationCallbackApplicationService(
 
                     GenerationOutcome.InProgress -> Unit
                 }
+                notification?.let { notifyCustomer(it) }
                 true
             }
             if (!accepted) {
@@ -76,7 +77,6 @@ class HandleGenerationCallbackApplicationService(
                     metrics.runpodCallbacksFailed.increment()
                 }
                 completedJob?.let { job -> metrics.recordJobDuration(System.currentTimeMillis() - job.createdAt.toInstant().toEpochMilli()) }
-                notifyCustomer(it)
             }
             metrics.recordWorkflow(AppMetrics.Workflow.GENERATION_CALLBACK, AppMetrics.WorkflowOutcome.ACCEPTED)
             return GenerationCallbackResult.ACCEPTED
@@ -85,15 +85,8 @@ class HandleGenerationCallbackApplicationService(
         }
     }
     private fun notifyCustomer(notification: JobNotification) {
-        try {
-            val userId = jobs.findUserIdByJobId(notification.jobId) ?: return
-            val url = webhooks.findByUserId(userId)?.url ?: return
-            client.deliver(url, notification)
-            metrics.webhookDeliveriesSuccess.increment()
-            log.info("User webhook delivered [jobId={}]", notification.jobId)
-        } catch (ex: Exception) {
-            metrics.webhookDeliveriesFailed.increment()
-            log.warn("User webhook delivery failed [jobId={}] error_type={}", notification.jobId, ex.javaClass.simpleName)
-        }
+        val userId = jobs.findUserIdByJobId(notification.jobId) ?: return
+        val url = webhooks.findByUserId(userId)?.url ?: return
+        client.publish(url, notification)
     }
 }

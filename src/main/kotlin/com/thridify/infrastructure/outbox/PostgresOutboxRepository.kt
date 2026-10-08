@@ -37,7 +37,7 @@ class PostgresOutboxRepository(private val dsl: DSLContext) : OutboxRepository {
 
     override fun findUnpublished(limit: Int): List<OutboxMessageEntity> = dsl.select(ID, AGGREGATE_TYPE, AGGREGATE_ID, PAYLOAD, CREATED_AT)
         .from(TABLE)
-        .where(PUBLISHED_AT.isNull)
+        .where(PUBLISHED_AT.isNull.and(DSL.field("next_attempt_at", OffsetDateTime::class.java).le(OffsetDateTime.now())))
         .orderBy(CREATED_AT.asc())
         .limit(limit)
         .fetch()
@@ -52,6 +52,9 @@ class PostgresOutboxRepository(private val dsl: DSLContext) : OutboxRepository {
             )
         }
 
+    override fun retryLater(id: UUID) {
+        dsl.execute("UPDATE outbox_messages SET next_attempt_at = now() + interval '1 minute' WHERE id = ? AND published_at IS NULL", id)
+    }
     override fun markPublished(id: UUID) {
         dsl.update(TABLE)
             .set(COL_PUBLISHED_AT, OffsetDateTime.now())
