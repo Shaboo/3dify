@@ -78,6 +78,28 @@ class JobControllerTest : IntegrationTestBase() {
             .andExpect { status { isUnauthorized() } }
     }
 
+    @Test
+    fun `other customers cannot read a known job or its history`() {
+        val jobId = seedJob(seedApiKey(), userId)
+        seedJobHistory(jobId)
+        val other = mockMvc.post("/auth/register") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"email":"other@example.com","password":"pass"}"""
+        }.andReturn()
+        val identity = objectMapper.readTree(other.response.contentAsString)
+        val otherId = UUID.fromString(identity.path("userId").asText())
+        val raw = "omni_pk_other_customer"
+        val hash = com.thridify.domain.access.ApiKeyPolicy().hash(raw)
+        dsl.execute("INSERT INTO subscriptions(billing_scope_id, provider, plan_id, status) VALUES (?, 'internal', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'active')", scopeId(otherId))
+        dsl.execute("INSERT INTO api_keys(workspace_id,billing_scope_id,created_by_user_id,plan_id,key_hash,key_prefix) VALUES (?,?,?,'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',?, 'omni_pk_')", workspaceId(otherId), scopeId(otherId), otherId, hash)
+        mockMvc.get("/dashboard/jobs/$jobId/history") {
+            header("Authorization", bearerToken(identity.path("token").asText()))
+        }.andExpect { status { isNotFound() } }
+        for (path in listOf("/api/v1/jobs/$jobId", "/api/v1/jobs/$jobId/history")) {
+            mockMvc.get(path) { header("X-API-KEY", raw) }.andExpect { status { isNotFound() } }
+        }
+    }
+
     // -------- helpers --------
 
     private fun seedFreePlan() {

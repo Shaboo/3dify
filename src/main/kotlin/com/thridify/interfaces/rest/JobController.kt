@@ -19,5 +19,5 @@ class JobController(private val listJobs: ListUserJobsApplicationService, privat
     fun listJobs(authentication: Authentication) = listJobs.execute(ListUserJobsQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
 
     @GetMapping("/{jobId}/history")
-    fun getJobHistory(@PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId)).map { it.toResponse() }
+    fun getJobHistory(authentication: Authentication, @PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId, UUID.fromString(authentication.principal as String))).map { it.toResponse() }
 }

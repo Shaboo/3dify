@@ -7,5 +7,5 @@ import org.springframework.stereotype.Service
 
 @Service
 class GetJobApplicationService(private val jobs: JobRepository) {
-    fun execute(query: GetJobQuery) = (jobs.findById(query.jobId) ?: throw NotFoundException("Job not found: ${query.jobId}")).toResult()
+    fun execute(query: GetJobQuery) = (jobs.findByApiKey(query.jobId, query.apiKeyId) ?: throw NotFoundException("Job not found: ${query.jobId}")).toResult()
 }

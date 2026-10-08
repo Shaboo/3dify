@@ -42,8 +42,8 @@ class GenerateController(
     fun listJobs(authentication: Authentication) = listJobs.execute(ListApiKeyJobsQuery(UUID.fromString(authentication.principal as String))).map { it.toResponse() }
 
     @GetMapping("/jobs/{jobId}")
-    fun getJob(@PathVariable jobId: UUID) = getJob.execute(GetJobQuery(jobId)).toResponse()
+    fun getJob(authentication: Authentication, @PathVariable jobId: UUID) = getJob.execute(GetJobQuery(jobId, UUID.fromString(authentication.principal as String))).toResponse()
 
     @GetMapping("/jobs/{jobId}/history")
-    fun getJobHistory(@PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId)).map { it.toResponse() }
+    fun getJobHistory(authentication: Authentication, @PathVariable jobId: UUID) = history.execute(GetJobHistoryQuery(jobId, UUID.fromString(authentication.principal as String), true)).map { it.toResponse() }
 }

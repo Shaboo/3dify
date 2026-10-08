@@ -15,6 +15,8 @@ interface JobRepository {
     fun updateExternalTaskId(jobId: UUID, externalTaskId: String): Unit
     fun lock(jobId: UUID): JobEntity?
     fun findById(jobId: UUID): JobEntity?
+    fun findByApiKey(jobId: UUID, apiKeyId: UUID): JobEntity?
+    fun findByUser(jobId: UUID, userId: UUID): JobEntity?
     fun findByExternalTaskId(externalTaskId: String): JobEntity?
     fun findAllByApiKeyId(apiKeyId: UUID): List<JobEntity>
     fun findAllByUserId(userId: UUID): List<JobEntity>

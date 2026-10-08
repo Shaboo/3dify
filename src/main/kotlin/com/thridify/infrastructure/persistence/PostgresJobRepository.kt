@@ -112,6 +112,13 @@ class PostgresJobRepository(private val dsl: DSLContext) : JobRepository {
 
     override fun findById(jobId: UUID): JobEntity? = dsl.select(*JOB_COLS).from(TABLE).where(J_ID.eq(jobId)).fetchOne()?.let(::toEntity)
 
+    override fun findByApiKey(jobId: UUID, apiKeyId: UUID): JobEntity? = dsl.select(*JOB_COLS).from(TABLE)
+        .where(J_ID.eq(jobId).and(J_API_KEY_ID.eq(apiKeyId))).fetchOne()?.let(::toEntity)
+
+    override fun findByUser(jobId: UUID, userId: UUID): JobEntity? = dsl.select(*JOB_COLS).from(TABLE)
+        .join(API_KEYS).on(J_API_KEY_ID.eq(AK_ID))
+        .where(J_ID.eq(jobId).and(AK_USER_ID.eq(userId))).fetchOne()?.let(::toEntity)
+
     override fun findByExternalTaskId(externalTaskId: String): JobEntity? = dsl.select(*JOB_COLS).from(TABLE).where(J_EXTERNAL_TASK_ID.eq(externalTaskId)).fetchOne()?.let(::toEntity)
 
     override fun findAllByApiKeyId(apiKeyId: UUID): List<JobEntity> = dsl.select(*JOB_COLS)
