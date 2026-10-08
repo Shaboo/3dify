@@ -42,3 +42,6 @@ omni3d:
     exchange: omni3d.exchange
     queue: 3d_task_queue
     routing-key: generate.3d
+
+app:
+  scheduling-enabled: false
