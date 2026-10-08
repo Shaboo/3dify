@@ -9,4 +9,5 @@ data class CreatePlanCommand(
     val priceCents: Int,
     val currency: String,
     val sortOrder: Int,
+    val requestId: java.util.UUID = java.util.UUID.randomUUID(),
 )

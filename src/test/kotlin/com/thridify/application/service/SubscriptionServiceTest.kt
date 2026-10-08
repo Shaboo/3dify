@@ -39,7 +39,10 @@ class SubscriptionServiceTest {
         override fun <T> transaction(action: () -> T): T = action()
     }
     private val status = GetSubscriptionStatusApplicationService(subscriptionRepository, policy)
-    private val checkout = CreateCheckoutSessionApplicationService(subscriptionRepository, planRepository, apiKeyRepository, metrics, billing, policy, transactions)
+    private val commands: com.thridify.domain.billing.BillingCommandRepository = mockk(relaxed = true) {
+        every { reserve(any(), any()) } answers { com.thridify.domain.billing.BillingCommandRecord(firstArg(), secondArg(), java.time.OffsetDateTime.now(), null, null) }
+    }
+    private val checkout = CreateCheckoutSessionApplicationService(subscriptionRepository, planRepository, apiKeyRepository, metrics, billing, policy, transactions, commands, com.thridify.domain.billing.BillingCommandPolicy())
     private val portal = CreateBillingPortalApplicationService(subscriptionRepository, billing, policy)
 
     private fun subWithPlan(
@@ -185,7 +188,7 @@ class SubscriptionServiceTest {
         val userId = UUID.randomUUID()
         val planId = UUID.randomUUID()
         every { planRepository.findById(planId) } returns plan(planId, 2900, "price-1")
-        every { billing.createCheckout(userId, planId, "price-1", "http://success", "http://cancel") } returns "http://checkout"
+        every { billing.createCheckout(userId, planId, "price-1", "http://success", "http://cancel", any()) } returns "http://checkout"
         val result = checkout.execute(CreateCheckoutSessionCommand(userId, planId, "http://success", "http://cancel"))
         assertEquals("http://checkout", result.checkoutUrl)
         verify { subscriptionRepository wasNot Called }

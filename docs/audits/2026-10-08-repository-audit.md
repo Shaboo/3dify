@@ -1,5 +1,7 @@
 What this repo does: This Kotlin/Spring backend accepts photos, runs paid 3D generation through Meshy or RunPod, and stores model outputs. It provides dashboard login, API keys, Stripe subscriptions, and store-scoped Shopify generation, billing, attachment, and privacy cleanup. The audit assumes several customers and stores using concurrent requests, persistent job histories, and one or more backend instances; it does not assume extreme traffic.
 
+**Resolution status (2026-10-08): All 20 findings addressed, with one commit per finding on `main`. The findings below preserve the original audit; the resolution log records the implemented behavior.**
+
 Audit date: 2026-10-08. The findings below are the original audit snapshot; the resolution log tracks subsequent fixes. Application code was not changed. Findings below come from traced source paths and existing tests; security exploits and paid provider calls were not run.
 
 ## Must fix
@@ -166,3 +168,15 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 13: Customer notification intents are written atomically with completion and delivered through the persistent outbox. HTTP failures stay pending with a one-minute retry delay. Receivers must deduplicate the stable X-3dify-Delivery-Id (job ID); delivery is at least once.
 
 - Finding 19: Shopify attachment transitions, ambiguity/retry limits, offer selection, snapshot ordering, period fallback, and generation-limit choice now live in pure domain policies. Orchestration and SQL stay in application/infrastructure; focused policy tests preserve the prior edge cases.
+
+- Finding 20: Checkout and plan creation record command identities before Stripe mutations; provider calls run outside database transactions with stable Stripe idempotency keys. Results replay without another mutation. Plan prices are persisted before the plan insert, so local failure retains a recoverable resource reference. Product/price creation uses one Stripe request. Uncertain commands older than 23 hours require manual reconciliation rather than unsafe resubmission.
+
+
+## Final fix verification (2026-10-08)
+
+- Complete run: `./gradlew unitTest integrationTest spotlessCheck assemble --console=plain` — successful. Both test tasks executed after the targeted runs: **127 unit/architecture tests and 124 integration tests, no failures, errors, or skips**. The executable application JAR was built.
+- Regressions include cross-customer reads, startup secrets, webhook destination/address checks, key revocation and entitlement, direct quota concurrency and idempotency, upload cleanup, cursor boundaries, durable notification rollback/outage recovery, real RabbitMQ mandatory returns/confirms, Stripe receipt persistence and stale events, billing command recovery, and Shopify domain transitions.
+- Log: `/private/tmp/3dify-all-fixes.log`. Test reports: `build/reports/tests/unitTest/` and `build/reports/tests/integrationTest/`.
+- Operational changes: production requires a strong `JWT_SECRET`; job arrays are paged at 50 rows; prices require a new plan instead of an in-place edit; safe generation/billing retries require a stable UUID `Idempotency-Key`; free generation allowances reset by UTC calendar month; customer webhook receivers must deduplicate delivery IDs.
+- Recovery limits: remote billing resources remain recorded when local writes fail. Retry the original command to recover a saved price/session; unresolved commands older than 23 hours require reconciliation using the ledger and Stripe logs. A recorded price with no completed plan may need manual retirement if the plan request is abandoned. Replayed checkout links retain their original expiry.
+- Not checked: live paid Stripe/Meshy/RunPod flows, real Shopify product mutations, production deployment/egress controls, dependency vulnerability feeds, full secret history, load tests, or separate frontend repositories. No live paid resources were created by these tests. The real broker test used a disposable RabbitMQ container; webhook policy checks did not exercise a live public TLS receiver.

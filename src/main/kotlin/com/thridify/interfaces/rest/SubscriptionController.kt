@@ -13,6 +13,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.util.UUID
@@ -28,7 +29,7 @@ class SubscriptionController(
     fun getStatus(authentication: Authentication) = status.execute(GetSubscriptionStatusQuery(UUID.fromString(authentication.principal as String))).toResponse()
 
     @PostMapping("/checkout")
-    fun createCheckout(authentication: Authentication, @RequestBody request: CreateCheckoutRequest) = checkout.execute(CreateCheckoutSessionCommand(UUID.fromString(authentication.principal as String), request.planId, request.successUrl, request.cancelUrl)).toResponse()
+    fun createCheckout(authentication: Authentication, @RequestBody request: CreateCheckoutRequest, @RequestHeader("Idempotency-Key", required = false) requestId: UUID?) = checkout.execute(CreateCheckoutSessionCommand(UUID.fromString(authentication.principal as String), request.planId, request.successUrl, request.cancelUrl, requestId ?: UUID.randomUUID())).toResponse()
 
     @PostMapping("/portal")
     fun createPortal(authentication: Authentication, @RequestBody request: PortalRequest) = portal.execute(CreateBillingPortalCommand(UUID.fromString(authentication.principal as String), request.returnUrl)).toResponse()

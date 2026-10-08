@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
@@ -35,7 +36,7 @@ class AdminController(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun createPlan(@RequestBody request: CreatePlanRequest) = createPlan.execute(
+    fun createPlan(@RequestBody request: CreatePlanRequest, @RequestHeader("Idempotency-Key", required = false) requestId: UUID?) = createPlan.execute(
         CreatePlanCommand(
             request.name,
             request.displayName,
@@ -45,6 +46,7 @@ class AdminController(
             request.priceCents,
             request.currency,
             request.sortOrder,
+            requestId ?: UUID.randomUUID(),
         ),
     ).toResponse()
 

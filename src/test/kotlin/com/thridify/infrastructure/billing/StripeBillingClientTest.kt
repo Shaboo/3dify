@@ -46,14 +46,33 @@ class StripeBillingClientTest {
     }
 
     @Test
+    fun `price creates its product atomically with a stable provider key`() {
+        mockkStatic(com.stripe.model.Price::class)
+        try {
+            val params = slot<com.stripe.param.PriceCreateParams>()
+            val options = slot<com.stripe.net.RequestOptions>()
+            every { com.stripe.model.Price.create(capture(params), capture(options)) } returns mockk { every { id } returns "price_1" }
+            assertEquals("price_1", client.createPrice("Paid", 2900, "usd", "plan-command"))
+            assertEquals("Paid", params.captured.productData.name)
+            assertEquals(null, params.captured.product)
+            assertEquals(2900L, params.captured.unitAmount)
+            assertEquals("plan-command", options.captured.idempotencyKey)
+        } finally {
+            unmockkStatic(com.stripe.model.Price::class)
+        }
+    }
+
+    @Test
     fun `checkout preserves stripe mode line item redirect suffix and metadata`() {
         val user = UUID.randomUUID()
         val plan = UUID.randomUUID()
         mockkStatic(Session::class)
         try {
             val params = slot<SessionCreateParams>()
-            every { Session.create(capture(params)) } returns mockk { every { url } returns "http://checkout" }
-            assertEquals("http://checkout", client.createCheckout(user, plan, "price_1", "http://success", "http://cancel"))
+            val options = slot<com.stripe.net.RequestOptions>()
+            every { Session.create(capture(params), capture(options)) } returns mockk { every { url } returns "http://checkout" }
+            assertEquals("http://checkout", client.createCheckout(user, plan, "price_1", "http://success", "http://cancel", "checkout-command"))
+            assertEquals("checkout-command", options.captured.idempotencyKey)
             assertEquals(SessionCreateParams.Mode.SUBSCRIPTION, params.captured.mode)
             assertEquals("price_1", params.captured.lineItems.single().price)
             assertEquals(1L, params.captured.lineItems.single().quantity)

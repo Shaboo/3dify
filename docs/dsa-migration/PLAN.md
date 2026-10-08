@@ -100,7 +100,7 @@ Update this file after each slice with changed classes, validation results and r
 2. Resolved: eight strict ArchUnit checks now enforce layers, technology restrictions, use-case ownership, entry-point composition, domain policies, namespace, shared dependencies and persistence placement. No frozen store, ignores, or violation budget remains.
 3. Resolved: application services now depend on domain ports/policies and cross-cutting metrics/logging only. Broad services and application-service chaining were removed.
 4. Resolved: REST endpoints, authentication filters, callbacks and listener each invoke one application service; the technical outbox scheduler stays in infrastructure. Infrastructure implements all SQL/vendor/storage/crypto/rate-limit/notification ports.
-5. Stripe checkout mutates an external service while its DB transaction is open. Changing timing/compensation is a separate behavior change.
+5. Historical gap, resolved by audit finding 20: Stripe checkout now runs outside database transactions, using recorded command identities and provider idempotency. Plan creation retains provider price references before local inserts.
 6. Worker and provider callbacks perform multiple independent database writes without a single transaction. Adding atomicity would change existing partial-failure behavior.
 7. Command and callback deduplication is absent. Outbox/Rabbit redelivery and repeated Stripe/RunPod callbacks can repeat side effects. Introducing idempotency needs a separate decision and possibly persistent schema support.
 8. API job retrieval/history endpoints do not check ownership in their current service calls. Any access-control correction is separate from the architecture refactor.

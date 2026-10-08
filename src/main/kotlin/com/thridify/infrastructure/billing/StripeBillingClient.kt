@@ -3,12 +3,11 @@ package com.thridify.infrastructure.billing
 import com.stripe.model.Event
 import com.stripe.model.Invoice
 import com.stripe.model.Price
-import com.stripe.model.Product
 import com.stripe.model.Subscription
 import com.stripe.model.checkout.Session
+import com.stripe.net.RequestOptions
 import com.stripe.net.Webhook
 import com.stripe.param.PriceCreateParams
-import com.stripe.param.ProductCreateParams
 import com.stripe.param.checkout.SessionCreateParams
 import com.thridify.domain.billing.BillingClient
 import com.thridify.domain.billing.BillingEvent
@@ -27,21 +26,20 @@ import com.stripe.param.billingportal.SessionCreateParams as PortalSessionCreate
 @Component
 class StripeBillingClient(@Value("\${stripe.webhook-secret}") private val webhookSecret: String) : BillingClient {
     private val log = LoggerFactory.getLogger(javaClass)
-    override fun createPrice(displayName: String, priceCents: Int, currency: String): String {
-        val product = Product.create(ProductCreateParams.builder().setName(displayName).build())
-        return Price.create(
-            PriceCreateParams.builder().setProduct(product.id).setUnitAmount(priceCents.toLong())
-                .setCurrency(currency).setRecurring(
-                    PriceCreateParams.Recurring.builder()
-                        .setInterval(PriceCreateParams.Recurring.Interval.MONTH).build(),
-                ).build(),
-        ).id
-    }
-    override fun createCheckout(userId: UUID, planId: UUID, priceId: String, successUrl: String, cancelUrl: String): String = Session.create(
+    override fun createPrice(displayName: String, priceCents: Int, currency: String, requestKey: String): String = Price.create(
+        PriceCreateParams.builder().setProductData(PriceCreateParams.ProductData.builder().setName(displayName).build()).setUnitAmount(priceCents.toLong())
+            .setCurrency(currency).setRecurring(
+                PriceCreateParams.Recurring.builder()
+                    .setInterval(PriceCreateParams.Recurring.Interval.MONTH).build(),
+            ).build(),
+        RequestOptions.builder().setIdempotencyKey(requestKey).build(),
+    ).id
+    override fun createCheckout(userId: UUID, planId: UUID, priceId: String, successUrl: String, cancelUrl: String, requestKey: String): String = Session.create(
         SessionCreateParams.builder().setMode(SessionCreateParams.Mode.SUBSCRIPTION)
             .addLineItem(SessionCreateParams.LineItem.builder().setPrice(priceId).setQuantity(1L).build())
             .setSuccessUrl("$successUrl?session_id={CHECKOUT_SESSION_ID}").setCancelUrl(cancelUrl)
             .putMetadata("userId", userId.toString()).putMetadata("planId", planId.toString()).build(),
+        RequestOptions.builder().setIdempotencyKey(requestKey).build(),
     ).url
 
     override fun createPortal(customerId: String, returnUrl: String): String = com.stripe.model.billingportal.Session.create(
