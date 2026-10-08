@@ -9,3 +9,5 @@ sealed interface BillingEvent {
     data class PaymentFailed(val customerId: String) : BillingEvent
     data object Ignored : BillingEvent
 }
+
+data class VerifiedBillingEvent(val id: String, val createdAt: java.time.OffsetDateTime, val event: BillingEvent)

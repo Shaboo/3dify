@@ -1,5 +1,6 @@
 package com.thridify.infrastructure.billing
 
+import com.stripe.model.Event
 import com.stripe.model.Invoice
 import com.stripe.model.Price
 import com.stripe.model.Product
@@ -12,6 +13,7 @@ import com.stripe.param.checkout.SessionCreateParams
 import com.thridify.domain.billing.BillingClient
 import com.thridify.domain.billing.BillingEvent
 import com.thridify.domain.billing.BillingSubscription
+import com.thridify.domain.billing.VerifiedBillingEvent
 import com.thridify.shared.exception.BadRequestException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -49,13 +51,16 @@ class StripeBillingClient(@Value("\${stripe.webhook-secret}") private val webhoo
 
     override fun retrieveSubscription(id: String) = Subscription.retrieve(id).toDomain()
 
-    override fun verifyEvent(payload: String, signature: String): BillingEvent {
+    override fun verifyEvent(payload: String, signature: String): VerifiedBillingEvent {
         val event = try {
             Webhook.constructEvent(payload, signature, webhookSecret)
         } catch (ex: Exception) {
             log.warn("Stripe webhook signature verification failed error_type={}", ex.javaClass.simpleName)
             throw BadRequestException("Invalid Stripe signature")
         }
+        return VerifiedBillingEvent(event.id, OffsetDateTime.ofInstant(Instant.ofEpochSecond(event.created ?: 0L), ZoneOffset.UTC), decodeEvent(event))
+    }
+    private fun decodeEvent(event: Event): BillingEvent {
         log.info("Stripe event received [type={}]", event.type)
         // Deserialize only handled types, matching the previous webhook behavior.
         val value by lazy { event.dataObjectDeserializer.`object`.orElse(null) }

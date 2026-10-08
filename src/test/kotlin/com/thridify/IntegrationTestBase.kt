@@ -34,6 +34,7 @@ abstract class IntegrationTestBase {
                 shopify_webhook_receipts,
                 usage_periods,
                 subscriptions,
+                stripe_event_receipts,
                 plan_offers,
                 platform_connections,
                 billing_scopes,

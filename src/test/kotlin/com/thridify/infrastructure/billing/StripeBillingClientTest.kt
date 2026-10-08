@@ -35,13 +35,13 @@ class StripeBillingClientTest {
         val user = UUID.randomUUID()
         val plan = UUID.randomUUID()
         val payload = """{"id":"evt_1","object":"event","api_version":"${Stripe.API_VERSION}","type":"checkout.session.completed","data":{"object":{"id":"cs_1","object":"checkout.session","metadata":{"userId":"$user","planId":"$plan"},"subscription":"sub_1"}}}"""
-        assertEquals(BillingEvent.CheckoutCompleted(user, plan, "sub_1"), client.verifyEvent(payload, signature(payload)))
+        assertEquals(BillingEvent.CheckoutCompleted(user, plan, "sub_1"), client.verifyEvent(payload, signature(payload)).event)
     }
 
     @Test
     fun `missing checkout metadata is ignored while invalid signatures keep the existing error`() {
         val payload = """{"id":"evt_1","object":"event","api_version":"${Stripe.API_VERSION}","type":"checkout.session.completed","data":{"object":{"id":"cs_1","object":"checkout.session","metadata":{},"subscription":"sub_1"}}}"""
-        assertIs<BillingEvent.Ignored>(client.verifyEvent(payload, signature(payload)))
+        assertIs<BillingEvent.Ignored>(client.verifyEvent(payload, signature(payload)).event)
         assertEquals("Invalid Stripe signature", assertThrows<BadRequestException> { client.verifyEvent(payload, "invalid") }.message)
     }
 

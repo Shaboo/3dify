@@ -1,14 +1,13 @@
 package com.thridify.application.service.subscription.webhook
-
 import com.thridify.domain.apikey.ApiKeyRepository
 import com.thridify.domain.billing.BillingClient
 import com.thridify.domain.billing.BillingEvent
+import com.thridify.domain.billing.StripeEventRepository
+import com.thridify.domain.subscription.SubscriptionPolicy
 import com.thridify.domain.subscription.SubscriptionRepository
 import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.shared.metrics.AppMetrics
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-
 @Service
 class HandleStripeWebhookApplicationService(
     private val subscriptions: SubscriptionRepository,
@@ -16,39 +15,49 @@ class HandleStripeWebhookApplicationService(
     private val billing: BillingClient,
     private val metrics: AppMetrics,
     private val transactions: TransactionProvider,
+    private val events: StripeEventRepository,
+    private val policy: SubscriptionPolicy,
 ) {
-    private val log = LoggerFactory.getLogger(javaClass)
-    fun execute(command: HandleStripeWebhookCommand) = transactions.transaction {
-        when (val event = billing.verifyEvent(command.payload, command.signature)) {
-            is BillingEvent.CheckoutCompleted -> {
-                val sub = billing.retrieveSubscription(event.subscriptionId)
-                subscriptions.upsertByUserId(event.userId, event.planId, event.subscriptionId, sub.customerId, sub.status, sub.periodEnd)
-                keys.updatePlanForUser(event.userId, event.planId)
-                metrics.subscriptionsActivated.increment()
-                log.info("Subscription activated via Stripe checkout [userId={}, planId={}]", event.userId, event.planId)
-            }
-
-            is BillingEvent.SubscriptionUpdated -> {
-                val sub = event.subscription
-                subscriptions.updateStatusByStripeSubId(sub.id, sub.status, sub.periodEnd)
-                log.info("Subscription updated [stripeSubId={}, status={}]", sub.id, sub.status)
-            }
-
-            is BillingEvent.SubscriptionDeleted -> {
-                subscriptions.updateStatusByStripeSubId(event.subscriptionId, "canceled", null)
-                subscriptions.findByStripeSubId(event.subscriptionId)?.let {
-                    metrics.subscriptionsCanceled.increment()
-                    log.info("Subscription canceled [userId={}]", it.userId)
+    fun execute(command: HandleStripeWebhookCommand) {
+        val verified = billing.verifyEvent(command.payload, command.signature)
+        val event = verified.event
+        val owner = when (event) {
+            is BillingEvent.CheckoutCompleted -> event.userId
+            is BillingEvent.SubscriptionUpdated -> subscriptions.findByStripeSubId(event.subscription.id)?.userId
+            is BillingEvent.SubscriptionDeleted -> subscriptions.findByStripeSubId(event.subscriptionId)?.userId
+            is BillingEvent.PaymentFailed -> subscriptions.findByStripeCustomerId(event.customerId)?.userId
+            BillingEvent.Ignored -> null
+        } ?: return
+        val current = when (event) {
+            is BillingEvent.CheckoutCompleted -> billing.retrieveSubscription(event.subscriptionId)
+            is BillingEvent.SubscriptionUpdated -> billing.retrieveSubscription(event.subscription.id)
+            is BillingEvent.PaymentFailed -> subscriptions.findByStripeCustomerId(event.customerId)?.stripeSubscriptionId?.let(billing::retrieveSubscription)
+            else -> null
+        }
+        transactions.transaction {
+            subscriptions.lock(owner)
+            val latest = events.latest(owner)
+            if (!events.record(owner, verified) || !policy.currentEvent(verified.createdAt, latest)) return@transaction
+            when (event) {
+                is BillingEvent.CheckoutCompleted -> {
+                    val sub = requireNotNull(current)
+                    if (!policy.activateCheckout(subscriptions.findActiveByUserId(owner), sub.id, sub.status)) return@transaction
+                    subscriptions.upsertByUserId(owner, event.planId, sub.id, sub.customerId, sub.status, sub.periodEnd)
+                    keys.updatePlanForUser(owner, event.planId)
+                    metrics.subscriptionsActivated.increment()
                 }
-            }
 
-            is BillingEvent.PaymentFailed -> {
-                subscriptions.updateStatusByStripeCustomerId(event.customerId, "past_due")
-                metrics.subscriptionsPastDue.increment()
-                log.warn("Payment failed -- subscription marked past_due [customerId={}]", event.customerId)
-            }
+                is BillingEvent.SubscriptionUpdated, is BillingEvent.PaymentFailed -> current?.let {
+                    subscriptions.updateStatusByStripeSubId(it.id, it.status, it.periodEnd)
+                }
 
-            BillingEvent.Ignored -> Unit
+                is BillingEvent.SubscriptionDeleted -> {
+                    subscriptions.updateStatusByStripeSubId(event.subscriptionId, "canceled", null)
+                    metrics.subscriptionsCanceled.increment()
+                }
+
+                BillingEvent.Ignored -> Unit
+            }
         }
     }
 }

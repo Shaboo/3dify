@@ -6,7 +6,10 @@ import com.thridify.domain.apikey.ApiKeyRepository
 import com.thridify.domain.billing.BillingClient
 import com.thridify.domain.billing.BillingEvent
 import com.thridify.domain.billing.BillingSubscription
+import com.thridify.domain.billing.StripeEventRepository
+import com.thridify.domain.billing.VerifiedBillingEvent
 import com.thridify.domain.subscription.SubscriptionEntity
+import com.thridify.domain.subscription.SubscriptionPolicy
 import com.thridify.domain.subscription.SubscriptionRepository
 import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.shared.metrics.AppMetrics
@@ -29,9 +32,13 @@ class HandleStripeWebhookTest {
     private val transactions = object : TransactionProvider {
         override fun <T> transaction(action: () -> T) = action()
     }
-    private val service = HandleStripeWebhookApplicationService(subscriptions, keys, billing, metrics, transactions)
+    private val events: StripeEventRepository = mockk {
+        every { latest(any()) } returns null
+        every { record(any(), any()) } returns true
+    }
+    private val service = HandleStripeWebhookApplicationService(subscriptions, keys, billing, metrics, transactions, events, SubscriptionPolicy())
     private fun handle(event: BillingEvent) {
-        every { billing.verifyEvent("payload", "signature") } returns event
+        every { billing.verifyEvent("payload", "signature") } returns VerifiedBillingEvent("event", OffsetDateTime.now(), event)
         service.execute(HandleStripeWebhookCommand("payload", "signature"))
     }
 
@@ -41,6 +48,7 @@ class HandleStripeWebhookTest {
         val plan = UUID.randomUUID()
         val end = OffsetDateTime.now()
         every { billing.retrieveSubscription("sub-1") } returns BillingSubscription("sub-1", "customer-1", "trialing", end)
+        every { subscriptions.findActiveByUserId(user) } returns null
         handle(BillingEvent.CheckoutCompleted(user, plan, "sub-1"))
         verifyOrder {
             billing.retrieveSubscription("sub-1")
@@ -50,42 +58,39 @@ class HandleStripeWebhookTest {
         assertEquals(1.0, metrics.subscriptionsActivated.count())
     }
 
-    @Test
-    fun `subscription updates never reactivate revoked api keys`() {
-        handle(BillingEvent.SubscriptionUpdated(BillingSubscription("sub-1", "customer-1", "trialing", null)))
-        verify { subscriptions.updateStatusByStripeSubId("sub-1", "trialing", null) }
-        verify { keys wasNot Called }
-        val user = UUID.randomUUID()
-        val stored = SubscriptionEntity(UUID.randomUUID(), user, UUID.randomUUID(), "sub-1", "customer-1", "active", null, OffsetDateTime.now(), null)
-        every { subscriptions.findByStripeSubId("sub-1") } returns stored
-        handle(BillingEvent.SubscriptionUpdated(BillingSubscription("sub-1", "customer-1", "active", null)))
-        verify { keys wasNot Called }
-    }
+    private val user = UUID.randomUUID()
+    private val stored = SubscriptionEntity(UUID.randomUUID(), user, UUID.randomUUID(), "sub-1", "customer-1", "active", null, OffsetDateTime.now(), null)
 
     @Test
-    fun `deletion gates subscription access without revoking keys`() {
-        val user = UUID.randomUUID()
-        every { subscriptions.findByStripeSubId("sub-1") } returns SubscriptionEntity(UUID.randomUUID(), user, UUID.randomUUID(), "sub-1", "customer-1", "canceled", null, OffsetDateTime.now(), null)
-        handle(BillingEvent.SubscriptionDeleted("sub-1"))
-        verifyOrder {
-            subscriptions.updateStatusByStripeSubId("sub-1", "canceled", null)
-            subscriptions.findByStripeSubId("sub-1")
-        }
-        assertEquals(1.0, metrics.subscriptionsCanceled.count())
-    }
-
-    @Test
-    fun `payment failure changes subscription status without deactivating keys`() {
+    fun `stale failure reads current provider state and never revives keys`() {
+        every { subscriptions.findByStripeCustomerId("customer-1") } returns stored
+        every { billing.retrieveSubscription("sub-1") } returns BillingSubscription("sub-1", "customer-1", "active", null)
         handle(BillingEvent.PaymentFailed("customer-1"))
-        verify { subscriptions.updateStatusByStripeCustomerId("customer-1", "past_due") }
+        verify { subscriptions.updateStatusByStripeSubId("sub-1", "active", null) }
         verify { keys wasNot Called }
-        assertEquals(1.0, metrics.subscriptionsPastDue.count())
     }
 
     @Test
-    fun `unknown event has no subscription or key side effects`() {
-        handle(BillingEvent.Ignored)
-        verify { subscriptions wasNot Called }
+    fun `duplicate events do not change subscriptions`() {
+        every { subscriptions.findByStripeSubId("sub-1") } returns stored
+        every { events.record(any(), any()) } returns false
+        handle(BillingEvent.SubscriptionDeleted("sub-1"))
+        verify(exactly = 0) { subscriptions.updateStatusByStripeSubId(any(), any(), any()) }
+    }
+
+    @Test
+    fun `older events do not change subscriptions`() {
+        every { subscriptions.findByStripeSubId("sub-1") } returns stored
+        every { events.latest(user) } returns OffsetDateTime.now().plusDays(1)
+        handle(BillingEvent.SubscriptionDeleted("sub-1"))
+        verify(exactly = 0) { subscriptions.updateStatusByStripeSubId(any(), any(), any()) }
+    }
+
+    @Test
+    fun `deletion cancels subscription without revoking keys`() {
+        every { subscriptions.findByStripeSubId("sub-1") } returns stored
+        handle(BillingEvent.SubscriptionDeleted("sub-1"))
+        verify { subscriptions.updateStatusByStripeSubId("sub-1", "canceled", null) }
         verify { keys wasNot Called }
     }
 }

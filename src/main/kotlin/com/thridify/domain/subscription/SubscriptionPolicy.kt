@@ -29,5 +29,7 @@ class SubscriptionPolicy {
         val found = subscription ?: throw BadRequestException("No active subscription found")
         return found.stripeCustomerId ?: throw BadRequestException("No Stripe customer linked to this subscription")
     }
+    fun currentEvent(created: java.time.OffsetDateTime, latest: java.time.OffsetDateTime?) = latest == null || !created.isBefore(latest)
+    fun activateCheckout(current: SubscriptionWithPlanEntity?, subscriptionId: String, status: String) = isActive(status) && (current?.stripeSubscriptionId == null || current.stripeSubscriptionId == subscriptionId)
     fun isActive(status: String?) = status in listOf("active", "trialing")
 }
