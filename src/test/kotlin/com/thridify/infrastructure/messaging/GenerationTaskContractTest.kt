@@ -30,9 +30,12 @@ class GenerationTaskContractTest {
         val stored = slot<String>()
         every { outbox.insert("JOB", id, capture(stored)) } just Runs
         OutboxGenerationTaskPublisher(outbox, mapper).publish(id, keys)
-        val rabbit: RabbitTemplate = mockk()
+        val rabbit: RabbitTemplate = mockk(relaxed = true)
         val delivered = slot<String>()
-        every { rabbit.convertAndSend("exchange", "routing-key", capture(delivered)) } just Runs
+        every { rabbit.convertAndSend("exchange", "routing-key", capture(delivered), any<org.springframework.amqp.rabbit.connection.CorrelationData>()) } answers {
+            arg<org.springframework.amqp.rabbit.connection.CorrelationData>(3).future.complete(org.springframework.amqp.rabbit.connection.CorrelationData.Confirm(true, null))
+            Unit
+        }
         com.thridify.infrastructure.outbox.RabbitGenerationTaskDelivery(TaskProducer(rabbit, mapper, "exchange", "routing-key"), mapper).deliver(
             com.thridify.infrastructure.outbox.OutboxMessageEntity(UUID.randomUUID(), "JOB", id, stored.captured, java.time.OffsetDateTime.now(), null),
         )
@@ -52,9 +55,12 @@ class GenerationTaskContractTest {
         every { outbox.insert("JOB", id, capture(stored)) } just Runs
         OutboxGenerationTaskPublisher(outbox, mapper).publish(id, "image-1", "image-2")
 
-        val rabbit: RabbitTemplate = mockk()
+        val rabbit: RabbitTemplate = mockk(relaxed = true)
         val delivered = slot<String>()
-        every { rabbit.convertAndSend("exchange", "routing-key", capture(delivered)) } just Runs
+        every { rabbit.convertAndSend("exchange", "routing-key", capture(delivered), any<org.springframework.amqp.rabbit.connection.CorrelationData>()) } answers {
+            arg<org.springframework.amqp.rabbit.connection.CorrelationData>(3).future.complete(org.springframework.amqp.rabbit.connection.CorrelationData.Confirm(true, null))
+            Unit
+        }
         TaskProducer(rabbit, mapper, "exchange", "routing-key").sendTask(id, "image-1", "image-2")
         val expected = mapper.readTree("""{"jobId":"$id","inputImage1Key":"image-1","inputImage2Key":"image-2"}""")
         assertEquals(expected, mapper.readTree(stored.captured))

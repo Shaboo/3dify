@@ -19,6 +19,10 @@ spring:
 
   # --- RabbitMQ ---
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     host: localhost
     port: 5672
     username: omni3d

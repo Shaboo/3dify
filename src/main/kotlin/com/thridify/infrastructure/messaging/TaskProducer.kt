@@ -15,10 +15,14 @@ class TaskProducer(
     @Value("\${omni3d.rabbitmq.routing-key}") private val routingKey: String,
 ) {
 
+    init {
+        rabbitTemplate.setMandatory(true)
+    }
+
     fun sendTask(jobId: UUID, imageKeys: List<String>) {
         if (imageKeys.size == 2) return sendTask(jobId, imageKeys[0], imageKeys[1])
         val message = GenerationTaskMessage(jobId, imageKeys.first(), imageKeys.getOrElse(1) { imageKeys.first() }, imageKeys)
-        rabbitTemplate.convertAndSend(exchange, routingKey, objectMapper.writeValueAsString(message))
+        send(message)
     }
 
     fun sendTask(jobId: UUID, imageKey1: String, imageKey2: String) {
@@ -27,7 +31,12 @@ class TaskProducer(
             inputImage1Key = imageKey1,
             inputImage2Key = imageKey2,
         )
-        val json = objectMapper.writeValueAsString(message)
-        rabbitTemplate.convertAndSend(exchange, routingKey, json)
+        send(message)
+    }
+    private fun send(message: GenerationTaskMessage) {
+        val correlation = org.springframework.amqp.rabbit.connection.CorrelationData()
+        rabbitTemplate.convertAndSend(exchange, routingKey, objectMapper.writeValueAsString(message), correlation)
+        val confirmation = correlation.future.get(10, java.util.concurrent.TimeUnit.SECONDS)
+        check(confirmation.ack() && correlation.returned == null) { "Generation message was not accepted by its queue" }
     }
 }
