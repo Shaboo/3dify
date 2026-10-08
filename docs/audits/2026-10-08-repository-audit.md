@@ -145,3 +145,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 ## Resolution log
 
 - Finding 17: Disabled automatic scheduling in integration contexts; added a regression check that no scheduling processor is registered.
+- Finding 4: Relay forwards the full input list; regression cases cover 1, 3, 4, and 100 images through the actual relay and worker.

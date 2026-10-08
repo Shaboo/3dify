@@ -13,16 +13,19 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.amqp.rabbit.core.RabbitTemplate
 import java.util.UUID
 import kotlin.test.assertEquals
 
 class GenerationTaskContractTest {
-    @Test
-    fun `unbounded input list survives outbox serialization and worker deserialization`() {
+    @ParameterizedTest
+    @ValueSource(ints = [1, 3, 4, 100])
+    fun `input list survives the actual outbox relay and worker`(count: Int) {
         val mapper = jacksonObjectMapper()
         val id = UUID.randomUUID()
-        val keys = List(100) { "image-$it" }
+        val keys = List(count) { "image-$it" }
         val outbox: OutboxRepository = mockk()
         val stored = slot<String>()
         every { outbox.insert("JOB", id, capture(stored)) } just Runs
@@ -30,11 +33,13 @@ class GenerationTaskContractTest {
         val rabbit: RabbitTemplate = mockk()
         val delivered = slot<String>()
         every { rabbit.convertAndSend("exchange", "routing-key", capture(delivered)) } just Runs
-        TaskProducer(rabbit, mapper, "exchange", "routing-key").sendTask(id, keys)
+        com.thridify.infrastructure.outbox.RabbitGenerationTaskDelivery(TaskProducer(rabbit, mapper, "exchange", "routing-key"), mapper).deliver(
+            com.thridify.infrastructure.outbox.OutboxMessageEntity(UUID.randomUUID(), "JOB", id, stored.captured, java.time.OffsetDateTime.now(), null),
+        )
         assertEquals(mapper.readTree(stored.captured), mapper.readTree(delivered.captured))
         val dispatch: DispatchGenerationTaskApplicationService = mockk()
         every { dispatch.execute(any()) } just Runs
-        TaskWorker(mapper, dispatch).handleTask(stored.captured)
+        TaskWorker(mapper, dispatch).handleTask(delivered.captured)
         verify(exactly = 1) { dispatch.execute(DispatchGenerationTaskCommand(id, keys)) }
     }
 

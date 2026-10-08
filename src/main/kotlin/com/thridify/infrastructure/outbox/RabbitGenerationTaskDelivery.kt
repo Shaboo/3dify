@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component
 class RabbitGenerationTaskDelivery(private val producer: TaskProducer, private val mapper: ObjectMapper) : GenerationTaskDelivery {
     override fun deliver(message: OutboxMessageEntity): java.util.UUID {
         val task = mapper.readValue(message.payload, GenerationTaskMessage::class.java)
-        producer.sendTask(task.jobId, task.inputImage1Key, task.inputImage2Key)
+        producer.sendTask(task.jobId, task.imageKeys ?: listOf(task.inputImage1Key, task.inputImage2Key))
         return task.jobId
     }
 }
