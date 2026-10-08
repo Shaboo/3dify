@@ -149,3 +149,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 1: Job details and history require the authenticated owner/key; cross-customer regression covers all three routes.
 - Finding 3: JWT signing secrets are validated at startup; the development key is restricted to the sole local profile.
 - Finding 2: Webhooks require public HTTPS destinations; delivery pins checked DNS addresses, verifies TLS hostnames, rejects redirects, and bounds connection/read/status parsing.
+- Finding 5: Removed subscription-driven key activation/deactivation; revocation stays permanent and subscription authorization remains the access gate.

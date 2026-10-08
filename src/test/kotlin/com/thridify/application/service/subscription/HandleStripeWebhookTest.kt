@@ -7,7 +7,6 @@ import com.thridify.domain.billing.BillingClient
 import com.thridify.domain.billing.BillingEvent
 import com.thridify.domain.billing.BillingSubscription
 import com.thridify.domain.subscription.SubscriptionEntity
-import com.thridify.domain.subscription.SubscriptionPolicy
 import com.thridify.domain.subscription.SubscriptionRepository
 import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.shared.metrics.AppMetrics
@@ -30,7 +29,7 @@ class HandleStripeWebhookTest {
     private val transactions = object : TransactionProvider {
         override fun <T> transaction(action: () -> T) = action()
     }
-    private val service = HandleStripeWebhookApplicationService(subscriptions, keys, billing, SubscriptionPolicy(), metrics, transactions)
+    private val service = HandleStripeWebhookApplicationService(subscriptions, keys, billing, metrics, transactions)
     private fun handle(event: BillingEvent) {
         every { billing.verifyEvent("payload", "signature") } returns event
         service.execute(HandleStripeWebhookCommand("payload", "signature"))
@@ -52,26 +51,25 @@ class HandleStripeWebhookTest {
     }
 
     @Test
-    fun `only active subscription updates reactivate api keys`() {
+    fun `subscription updates never reactivate revoked api keys`() {
         handle(BillingEvent.SubscriptionUpdated(BillingSubscription("sub-1", "customer-1", "trialing", null)))
         verify { subscriptions.updateStatusByStripeSubId("sub-1", "trialing", null) }
-        verify(exactly = 0) { keys.setActiveByUserId(any(), any()) }
+        verify { keys wasNot Called }
         val user = UUID.randomUUID()
         val stored = SubscriptionEntity(UUID.randomUUID(), user, UUID.randomUUID(), "sub-1", "customer-1", "active", null, OffsetDateTime.now(), null)
         every { subscriptions.findByStripeSubId("sub-1") } returns stored
         handle(BillingEvent.SubscriptionUpdated(BillingSubscription("sub-1", "customer-1", "active", null)))
-        verify(exactly = 1) { keys.setActiveByUserId(user, true) }
+        verify { keys wasNot Called }
     }
 
     @Test
-    fun `deletion cancels subscription and deactivates keys`() {
+    fun `deletion gates subscription access without revoking keys`() {
         val user = UUID.randomUUID()
         every { subscriptions.findByStripeSubId("sub-1") } returns SubscriptionEntity(UUID.randomUUID(), user, UUID.randomUUID(), "sub-1", "customer-1", "canceled", null, OffsetDateTime.now(), null)
         handle(BillingEvent.SubscriptionDeleted("sub-1"))
         verifyOrder {
             subscriptions.updateStatusByStripeSubId("sub-1", "canceled", null)
             subscriptions.findByStripeSubId("sub-1")
-            keys.setActiveByUserId(user, false)
         }
         assertEquals(1.0, metrics.subscriptionsCanceled.count())
     }
@@ -80,7 +78,7 @@ class HandleStripeWebhookTest {
     fun `payment failure changes subscription status without deactivating keys`() {
         handle(BillingEvent.PaymentFailed("customer-1"))
         verify { subscriptions.updateStatusByStripeCustomerId("customer-1", "past_due") }
-        verify(exactly = 0) { keys.setActiveByUserId(any(), any()) }
+        verify { keys wasNot Called }
         assertEquals(1.0, metrics.subscriptionsPastDue.count())
     }
 

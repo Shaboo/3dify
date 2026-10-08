@@ -103,10 +103,4 @@ class PostgresApiKeyRepository(private val dsl: DSLContext, private val workspac
             .and(AK_IS_ACTIVE.isTrue)
             .execute()
     }
-
-    override fun setActiveByUserId(userId: UUID, active: Boolean) {
-        val q = dsl.update(KEYS).set(COL_IS_ACTIVE, active)
-        if (!active) q.set(COL_REVOKED_AT, OffsetDateTime.now())
-        q.where(DSL.field(DSL.name("api_keys", "billing_scope_id"), UUID::class.java).eq(workspaces.billingScopeId(userId))).execute()
-    }
 }

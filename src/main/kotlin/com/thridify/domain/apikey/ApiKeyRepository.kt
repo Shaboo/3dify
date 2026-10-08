@@ -10,5 +10,4 @@ interface ApiKeyRepository {
     fun revoke(userId: UUID, keyId: UUID): Int
     fun findByKeyHash(hash: String): ApiKeyAuthEntity?
     fun updatePlanForUser(userId: UUID, planId: UUID): Unit
-    fun setActiveByUserId(userId: UUID, active: Boolean): Unit
 }

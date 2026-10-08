@@ -3,7 +3,6 @@ package com.thridify.application.service.subscription.webhook
 import com.thridify.domain.apikey.ApiKeyRepository
 import com.thridify.domain.billing.BillingClient
 import com.thridify.domain.billing.BillingEvent
-import com.thridify.domain.subscription.SubscriptionPolicy
 import com.thridify.domain.subscription.SubscriptionRepository
 import com.thridify.domain.transaction.TransactionProvider
 import com.thridify.shared.metrics.AppMetrics
@@ -15,7 +14,6 @@ class HandleStripeWebhookApplicationService(
     private val subscriptions: SubscriptionRepository,
     private val keys: ApiKeyRepository,
     private val billing: BillingClient,
-    private val policy: SubscriptionPolicy,
     private val metrics: AppMetrics,
     private val transactions: TransactionProvider,
 ) {
@@ -34,20 +32,13 @@ class HandleStripeWebhookApplicationService(
                 val sub = event.subscription
                 subscriptions.updateStatusByStripeSubId(sub.id, sub.status, sub.periodEnd)
                 log.info("Subscription updated [stripeSubId={}, status={}]", sub.id, sub.status)
-                if (policy.shouldReactivateKeys(sub.status)) {
-                    subscriptions.findByStripeSubId(sub.id)?.let {
-                        keys.setActiveByUserId(it.userId, true)
-                        metrics.subscriptionsActivated.increment()
-                    }
-                }
             }
 
             is BillingEvent.SubscriptionDeleted -> {
                 subscriptions.updateStatusByStripeSubId(event.subscriptionId, "canceled", null)
                 subscriptions.findByStripeSubId(event.subscriptionId)?.let {
-                    keys.setActiveByUserId(it.userId, false)
                     metrics.subscriptionsCanceled.increment()
-                    log.info("Subscription canceled -- API keys deactivated [userId={}]", it.userId)
+                    log.info("Subscription canceled [userId={}]", it.userId)
                 }
             }
 

@@ -26,5 +26,4 @@ class SubscriptionPolicy {
         return found.stripeCustomerId ?: throw BadRequestException("No Stripe customer linked to this subscription")
     }
     fun isActive(status: String?) = status in listOf("active", "trialing")
-    fun shouldReactivateKeys(status: String) = status == "active"
 }
