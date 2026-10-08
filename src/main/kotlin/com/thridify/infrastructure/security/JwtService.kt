@@ -14,9 +14,14 @@ import javax.crypto.SecretKey
 class JwtService(
     @Value("\${omni3d.jwt.secret}") private val secret: String,
     @Value("\${omni3d.jwt.expiration-ms}") private val expirationMs: Long,
+    environment: org.springframework.core.env.Environment,
 ) : TokenClient {
 
-    private val key: SecretKey by lazy { Keys.hmacShaKeyFor(secret.toByteArray()) }
+    init {
+        require(secret.toByteArray().size >= 32 && !secret.startsWith("CHANGE_ME")) { "Configure a JWT_SECRET of at least 32 bytes" }
+        require(!secret.startsWith("local-development-only-") || environment.activeProfiles.toSet() == setOf("local")) { "The development JWT secret requires only the local profile" }
+    }
+    private val key: SecretKey = Keys.hmacShaKeyFor(secret.toByteArray())
 
     override fun generateToken(userId: UUID, email: String): String {
         val now = Date()

@@ -68,7 +68,7 @@ management:
 # --- Custom App Config ---
 omni3d:
   jwt:
-    secret: "CHANGE_ME_IN_PRODUCTION_minimum_32_chars_long_secret_key_here!"
+    secret: "${JWT_SECRET:}"
     expiration-ms: 86400000  # 24 hours
 
   r2:

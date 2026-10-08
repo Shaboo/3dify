@@ -80,3 +80,5 @@ Safe failures retry without generating another model or consuming another genera
 API additions: authenticated `GET /shopify/api/products/{numericProductId}/images`, JSON `POST /shopify/api/products/{numericProductId}/models` with `{ "imageIds": ["gid://shopify/MediaImage/..."] }` and an `Idempotency-Key` UUID, or existing multipart `POST /shopify/api/models` with `productId=gid://shopify/Product/...` plus `images` parts. Legacy unbound jobs retain the old manual attachment action.
 
 Restart the backend to apply migrations. Real end-to-end generation still requires configured Meshy credentials, owned model storage, generation polling, and a working Shopify billing subscription/offer mapping. Automated tests use mocked Shopify/GPU boundaries and Testcontainers PostgreSQL; no paid generation or live product mutation is performed during verification.
+
+JWT signing requires `JWT_SECRET` (at least 32 bytes) outside the explicit `local` profile. The local profile supplies a development-only key; production refuses missing, placeholder, or development keys.

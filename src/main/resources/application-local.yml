@@ -1,0 +1,3 @@
+omni3d:
+  jwt:
+    secret: "${JWT_SECRET:local-development-only-jwt-secret-do-not-deploy}"
