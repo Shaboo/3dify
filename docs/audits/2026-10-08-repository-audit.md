@@ -164,3 +164,5 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 9: Stripe receipts deduplicate events under the billing scope lock; older events cannot overwrite new state. Updates and failures retrieve current provider state, and stale checkouts cannot replace another live subscription. Provider reads occur outside database transactions.
 
 - Finding 13: Customer notification intents are written atomically with completion and delivered through the persistent outbox. HTTP failures stay pending with a one-minute retry delay. Receivers must deduplicate the stable X-3dify-Delivery-Id (job ID); delivery is at least once.
+
+- Finding 19: Shopify attachment transitions, ambiguity/retry limits, offer selection, snapshot ordering, period fallback, and generation-limit choice now live in pure domain policies. Orchestration and SQL stay in application/infrastructure; focused policy tests preserve the prior edge cases.

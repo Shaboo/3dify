@@ -1,6 +1,8 @@
 package com.thridify.infrastructure.shopify
 
 import com.thridify.domain.shopify.ShopifyAllowancePolicy
+import com.thridify.domain.shopify.ShopifyBillingObservation
+import com.thridify.domain.shopify.ShopifyBillingPolicy
 import com.thridify.domain.shopify.ShopifyBillingSnapshot
 import com.thridify.domain.shopify.ShopifyEntitlement
 import com.thridify.domain.shopify.ShopifyShop
@@ -15,7 +17,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 @Repository
-class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val allowances: ShopifyAllowancePolicy) : ShopifyStoreRepository {
+class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val allowances: ShopifyAllowancePolicy, private val policy: ShopifyBillingPolicy) : ShopifyStoreRepository {
     private val storeQuery = "SELECT c.*, b.id AS scope_id FROM platform_connections c JOIN billing_scopes b ON b.connection_id = c.id WHERE c.platform = 'shopify'"
 
     override fun connect(shop: ShopifyShop): ShopifyStore {
@@ -40,10 +42,12 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val al
 
     override fun synchronize(store: ShopifyStore, snapshot: ShopifyBillingSnapshot?, observedAt: OffsetDateTime): ShopifyEntitlement {
         val current = dsl.fetchOne("$storeQuery AND c.id = ? FOR UPDATE OF c", store.connectionId) ?: return inactive("disconnected")
-        if (current.get("status", String::class.java) != "connected") return inactive("disconnected")
-        if (observedAt.isBefore(current.get("installed_at", OffsetDateTime::class.java)!!)) return inactive("pending")
-        val checked = current.get("billing_checked_at", OffsetDateTime::class.java)
-        if (checked != null && !observedAt.isAfter(checked)) return entitlement(store.billingScopeId)
+        when (policy.observation(current.get("status", String::class.java), current.get("installed_at", OffsetDateTime::class.java), current.get("billing_checked_at", OffsetDateTime::class.java), observedAt)) {
+            ShopifyBillingObservation.DISCONNECTED -> return inactive("disconnected")
+            ShopifyBillingObservation.PENDING -> return inactive("pending")
+            ShopifyBillingObservation.REUSE -> return entitlement(store.billingScopeId)
+            ShopifyBillingObservation.APPLY -> Unit
+        }
         dsl.execute("UPDATE platform_connections SET billing_checked_at = ? WHERE id = ?", Timestamp.from(observedAt.toInstant()), store.connectionId)
         if (snapshot == null) {
             dsl.execute("UPDATE subscriptions SET status = 'canceled', updated_at = now() WHERE billing_scope_id = ? AND provider = 'shopify' AND status NOT IN ('canceled', 'expired', 'incomplete_expired')", store.billingScopeId)
@@ -54,16 +58,14 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val al
             dsl.execute("INSERT INTO plans (name, display_name, monthly_quota, is_active) VALUES ('shopify-local-test', 'Local Shopify testing', ?, false) ON CONFLICT (name) DO NOTHING", snapshot.localTestGenerationLimit)
             dsl.fetchOne("SELECT * FROM plans WHERE name = 'shopify-local-test'")!!
         } else {
-            if (snapshot.offerHandles.isEmpty()) return unmapped(store.billingScopeId)
             val placeholders = snapshot.offerHandles.joinToString(",") { "?" }
-            val plans = dsl.fetch("SELECT DISTINCT p.* FROM plans p JOIN plan_offers o ON o.plan_id = p.id WHERE o.provider = 'shopify' AND o.billing_interval = ? AND p.is_active AND o.external_offer_id IN ($placeholders)", *arrayOf<Any>(snapshot.interval, *snapshot.offerHandles.toTypedArray()))
-            if (plans.size != 1) return unmapped(store.billingScopeId)
-            plans.single()
+            val plans = if (snapshot.offerHandles.isEmpty()) emptyList() else dsl.fetch("SELECT DISTINCT p.* FROM plans p JOIN plan_offers o ON o.plan_id = p.id WHERE o.provider = 'shopify' AND o.billing_interval = ? AND p.is_active AND o.external_offer_id IN ($placeholders)", *arrayOf<Any>(snapshot.interval, *snapshot.offerHandles.toTypedArray()))
+            val selected = policy.selectPlan(plans.map { it.get("id", UUID::class.java)!! }) ?: return unmapped(store.billingScopeId)
+            plans.first { it.get("id", UUID::class.java) == selected }
         }
         val planId = plan.get("id", UUID::class.java)!!
         val previous = dsl.fetchOne("SELECT * FROM subscriptions WHERE billing_scope_id = ? AND status NOT IN ('canceled', 'expired', 'incomplete_expired')", store.billingScopeId)
-        val start = snapshot.periodStart ?: previous?.takeIf { it.get("current_period_end", OffsetDateTime::class.java)?.isEqual(snapshot.periodEnd) == true }?.get("current_period_start", OffsetDateTime::class.java) ?: observedAt
-        if (!snapshot.periodEnd.isAfter(start)) throw ApiException(502, "Shopify returned an invalid billing period")
+        val start = policy.periodStart(snapshot, previous?.get("current_period_start", OffsetDateTime::class.java), previous?.get("current_period_end", OffsetDateTime::class.java), observedAt)
         val legacy = snapshot.externalSubscriptionId?.let { dsl.fetchOne("SELECT id FROM subscriptions WHERE provider = 'shopify' AND external_subscription_id = ? AND billing_scope_id = ?", it, store.billingScopeId) }
         val id = previous?.get("id", UUID::class.java) ?: legacy?.get("id", UUID::class.java)
         if (id == null) {
@@ -83,7 +85,7 @@ class PostgresShopifyStoreRepository(private val dsl: DSLContext, private val al
             store.billingScopeId,
             Timestamp.from(allowance.start.toInstant()),
             Timestamp.from(allowance.end.toInstant()),
-            snapshot.localTestGenerationLimit ?: plan.get("monthly_quota", Int::class.java),
+            policy.generationLimit(snapshot, plan.get("monthly_quota", Int::class.java)!!),
         )
         return entitlement(store.billingScopeId)
     }
