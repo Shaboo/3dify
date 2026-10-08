@@ -6,6 +6,7 @@ import java.time.OffsetDateTime
 import java.util.UUID
 
 interface SubscriptionRepository {
+    fun lock(userId: UUID): Unit
     fun findActiveByUserId(userId: UUID): SubscriptionWithPlanEntity?
     fun findByStripeSubId(stripeSubId: String): SubscriptionEntity?
     fun findByStripeCustomerId(stripeCustomerId: String): SubscriptionEntity?

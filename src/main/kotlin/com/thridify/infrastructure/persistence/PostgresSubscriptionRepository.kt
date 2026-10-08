@@ -58,6 +58,10 @@ class PostgresSubscriptionRepository(private val dsl: DSLContext, private val wo
         )
     }
 
+    override fun lock(userId: UUID) {
+        dsl.fetch("SELECT id FROM billing_scopes WHERE id = ? FOR UPDATE", workspaces.billingScopeId(userId))
+    }
+
     override fun findActiveByUserId(userId: UUID): SubscriptionWithPlanEntity? = dsl.select(*WITH_PLAN_COLS)
         .from(SUBS)
         .join(PLANS).on(S_PLAN_ID.eq(P_ID))

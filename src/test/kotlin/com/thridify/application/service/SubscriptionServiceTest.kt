@@ -139,6 +139,8 @@ class SubscriptionServiceTest {
         val userId = UUID.randomUUID()
         val planId = UUID.randomUUID()
         every { planRepository.findById(planId) } returns plan(id = planId, priceCents = 0)
+        every { subscriptionRepository.lock(userId) } just Runs
+        every { subscriptionRepository.findActiveByUserId(userId) } returns null
         every { subscriptionRepository.upsertByUserId(userId, planId, null, null, "active", null) } just Runs
         every { apiKeyRepository.updatePlanForUser(userId, planId) } just Runs
 
@@ -162,6 +164,18 @@ class SubscriptionServiceTest {
         assertThrows<NotFoundException> {
             checkout.execute(CreateCheckoutSessionCommand(UUID.randomUUID(), UUID.randomUUID(), "http://s", "http://c"))
         }
+    }
+
+    @Test
+    fun `free activation cannot replace a paid subscription or lose its billing references`() {
+        val userId = UUID.randomUUID()
+        val free = plan()
+        every { planRepository.findById(free.id) } returns free
+        every { subscriptionRepository.lock(userId) } just Runs
+        every { subscriptionRepository.findActiveByUserId(userId) } returns subWithPlan(stripeCustomerId = "customer-still-billed")
+        assertThrows<com.thridify.shared.exception.BadRequestException> { checkout.execute(CreateCheckoutSessionCommand(userId, free.id, "http://s", "http://c")) }
+        verify(exactly = 0) { subscriptionRepository.upsertByUserId(any(), any(), any(), any(), any(), any()) }
+        verify { apiKeyRepository wasNot Called }
     }
 
     // -------- createBillingPortal --------

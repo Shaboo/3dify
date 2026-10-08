@@ -153,3 +153,4 @@ Not checked: Live Meshy/RunPod/Stripe/Shopify behavior, paid generation, real pr
 - Finding 6: Key creation checks subscription entitlement; request limits come from the subscription, including for legacy keys with a higher selected plan.
 - Finding 16: Domain credential validation rejects malformed/overlong emails, blank passwords, bcrypt-overlong UTF-8 passwords, and overlong names before persistence or hashing.
 - Finding 11: Domain policies reject checkout and new keys for deactivated plans; existing subscribed access is preserved.
+- Finding 8: Free activation locks the billing scope and refuses to replace a still-paid subscription; customers retain billing portal access until confirmed cancellation.

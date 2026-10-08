@@ -22,6 +22,9 @@ class SubscriptionPolicy {
         if (priceId.isNullOrBlank()) throw BadRequestException("Plan is not linked to a Stripe price")
         return CheckoutDecision.Paid(priceId)
     }
+    fun ensureFreeActivation(subscription: SubscriptionWithPlanEntity?) {
+        if (subscription?.stripeSubscriptionId != null || subscription?.stripeCustomerId != null) throw BadRequestException("Cancel the paid subscription in the billing portal before choosing a free plan")
+    }
     fun portalCustomer(subscription: SubscriptionWithPlanEntity?): String {
         val found = subscription ?: throw BadRequestException("No active subscription found")
         return found.stripeCustomerId ?: throw BadRequestException("No Stripe customer linked to this subscription")

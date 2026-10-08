@@ -27,6 +27,8 @@ class CreateCheckoutSessionApplicationService(
         log.info("Creating checkout session [userId={}, planId={}]", command.userId, command.planId)
         when (val decision = policy.checkout(plans.findById(command.planId), command.planId)) {
             CheckoutDecision.ActivateFree -> {
+                subscriptions.lock(command.userId)
+                policy.ensureFreeActivation(subscriptions.findActiveByUserId(command.userId))
                 subscriptions.upsertByUserId(command.userId, command.planId, null, null, "active", null)
                 keys.updatePlanForUser(command.userId, command.planId)
                 metrics.subscriptionsActivated.increment()
