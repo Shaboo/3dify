@@ -15,9 +15,11 @@ class CreateApiKeyApplicationService(
     private val plans: PlanRepository,
     private val metrics: AppMetrics,
     private val policy: ApiKeyPolicy,
+    private val subscriptions: com.thridify.domain.subscription.SubscriptionRepository,
 ) {
     fun execute(command: CreateApiKeyCommand): ApiKeyCreatedResult {
         val plan = policy.requirePlan(plans.findByName(command.planName), command.planName)
+        policy.ensurePlanAllowed(plan, subscriptions.findActiveByUserId(command.userId))
         val raw = policy.createRawKey()
         val id = UUID.randomUUID()
         keys.insert(id, command.userId, plan.id, policy.hash(raw), raw.take(16), command.label)

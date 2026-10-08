@@ -30,12 +30,13 @@ class AuthorizeApiRequestApplicationService(
         }
         metrics.apiKeyValidations.increment()
         key!!
-        val denied = policy.subscriptionDenial(subscriptions.findActiveByUserId(key.userId))
+        val subscription = subscriptions.findActiveByUserId(key.userId)
+        val denied = policy.subscriptionDenial(subscription)
         if (denied != null) {
             metrics.authFailuresSubscription.increment()
             return ApiAuthorizationResult.Denied(403, denied)
         }
-        if (!rateLimiter.isAllowed(key.id, key.rateLimitRpm)) {
+        if (!rateLimiter.isAllowed(key.id, requireNotNull(subscription).planRateLimitRpm)) {
             metrics.rateLimitRejections.increment()
             metrics.authFailuresRateLimit.increment()
             return ApiAuthorizationResult.Denied(429, "Rate limit exceeded")

@@ -33,6 +33,7 @@ class AuthorizeApiRequestTest {
 
     private fun subscription(status: String): SubscriptionWithPlanEntity = mockk<SubscriptionWithPlanEntity>().also {
         every { it.status } returns status
+        every { it.planRateLimitRpm } returns 60
     }
 
     @Test
@@ -68,6 +69,15 @@ class AuthorizeApiRequestTest {
             subscriptions.findActiveByUserId(key.userId)
             limiter.isAllowed(key.id, 60)
         }
+    }
+
+    @Test
+    fun `legacy key plan cannot raise subscription rate limit`() {
+        every { keys.findByKeyHash(any()) } returns key.copy(rateLimitRpm = 200)
+        every { subscriptions.findActiveByUserId(key.userId) } returns subscription("active")
+        every { limiter.isAllowed(key.id, 60) } returns true
+        assertIs<ApiAuthorizationResult.Authorized>(service.execute(command))
+        verify(exactly = 0) { limiter.isAllowed(key.id, 200) }
     }
 
     @Test

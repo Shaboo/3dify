@@ -38,7 +38,7 @@ class RateLimiterService(
     override fun isAllowed(apiKeyId: UUID, maxRequestsPerMinute: Int): Boolean {
         if (maxRequestsPerMinute <= 0) return false
 
-        val key = apiKeyId.toString()
+        val key = "$apiKeyId:$maxRequestsPerMinute"
         val configuration = BucketConfiguration.builder()
             .addLimit(
                 Bandwidth.builder()

@@ -99,6 +99,16 @@ class ApiKeyControllerTest : IntegrationTestBase() {
     }
 
     @Test
+    fun `a customer cannot select an unpaid pro plan`() {
+        mockMvc.post("/dashboard/api-keys") {
+            header("Authorization", bearerToken(token))
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"planName":"pro"}"""
+        }.andExpect { status { isForbidden() } }
+        kotlin.test.assertEquals(0, dsl.fetchCount(org.jooq.impl.DSL.table("api_keys")))
+    }
+
+    @Test
     fun `create API key without auth returns 401`() {
         mockMvc.post("/dashboard/api-keys") {
             contentType = MediaType.APPLICATION_JSON

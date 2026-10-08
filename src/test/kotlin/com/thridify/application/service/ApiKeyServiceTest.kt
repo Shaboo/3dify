@@ -34,9 +34,9 @@ class ApiKeyServiceTest {
     private val planRepository: PlanRepository = mockk()
     private val metrics = AppMetrics(SimpleMeterRegistry())
     private val policy = com.thridify.domain.access.ApiKeyPolicy()
-    private val create = CreateApiKeyApplicationService(apiKeyRepository, planRepository, metrics, policy)
     private val revoke = RevokeApiKeyApplicationService(apiKeyRepository, metrics, policy)
     private val subscriptions: SubscriptionRepository = mockk()
+    private val create = CreateApiKeyApplicationService(apiKeyRepository, planRepository, metrics, policy, subscriptions)
     private val limiter: RequestRateLimiter = mockk()
     private val authorize = AuthorizeApiRequestApplicationService(apiKeyRepository, subscriptions, limiter, policy, metrics)
 
@@ -68,6 +68,7 @@ class ApiKeyServiceTest {
     @Test
     fun `generateKey returns raw key starting with omni_pk_`() {
         val planId = UUID.randomUUID()
+        every { subscriptions.findActiveByUserId(any()) } returns null
         every { planRepository.findByName("free") } returns plan(id = planId)
         every { apiKeyRepository.insert(any(), any(), planId, any(), any(), null) } just Runs
 
@@ -112,6 +113,7 @@ class ApiKeyServiceTest {
 
         val subscription: com.thridify.domain.subscription.SubscriptionWithPlanEntity = mockk()
         every { subscription.status } returns "active"
+        every { subscription.planRateLimitRpm } returns 60
         every { subscriptions.findActiveByUserId(userId) } returns subscription
         every { limiter.isAllowed(keyId, 60) } returns true
         val result = authorize.execute(AuthorizeApiRequestCommand("omni_pk_somefakekey1234567890123456789012345678"))

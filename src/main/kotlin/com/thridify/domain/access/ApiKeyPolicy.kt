@@ -19,6 +19,10 @@ class ApiKeyPolicy {
     fun hasValidPrefix(rawKey: String) = rawKey.startsWith("omni_pk_")
     fun isValid(key: ApiKeyAuthEntity?) = key != null && key.isActive
     fun requirePlan(plan: PlanEntity?, name: String): PlanEntity = plan ?: throw NotFoundException("Plan '$name' not found")
+    fun ensurePlanAllowed(plan: PlanEntity, subscription: SubscriptionWithPlanEntity?) {
+        val permitted = if (subscription?.status in setOf("active", "trialing")) plan.id == subscription?.planId else plan.name == "free"
+        if (!permitted) throw com.thridify.shared.exception.ApiException(403, "Choose the plan on your subscription")
+    }
     fun ensureRevoked(count: Int) {
         if (count == 0) throw NotFoundException("API key not found")
     }
